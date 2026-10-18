@@ -1,0 +1,28 @@
+{
+    "name": "@windstone/merger",
+    "private": true,
+    "version": "0.0.0",
+    "type": "module",
+    "exports": {
+        ".": "./src/merge.ts",
+        "./evaluate": "./src/evaluate.ts"
+    },
+    "engines": {
+        "node": ">=22.18.0"
+    },
+    "scripts": {
+        "build": "tsc --noEmit",
+        "test": "vitest run",
+        "merge": "node src/cli.ts",
+        "benchmark": "node src/cli.ts --benchmark"
+    },
+    "dependencies": {
+        "simplify-js": "^1.2.4"
+    },
+    "devDependencies": {
+        "@types/geojson": "^7946.0.16",
+        "@types/node": "^24.13.3",
+        "typescript": "~6.0.2",
+        "vitest": "^4.0.16"
+    }
+}

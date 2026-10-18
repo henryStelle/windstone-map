@@ -1,0 +1,11 @@
+{
+  "name": "windstone-trails",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev:simulator": "pnpm --filter @windstone/simulator dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test"
+  }
+}
