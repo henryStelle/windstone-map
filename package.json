@@ -5,6 +5,9 @@
   "scripts": {
     "build": "pnpm -r build",
     "dev:simulator": "pnpm --filter @windstone/simulator dev",
+    "dev": "pnpm --filter @windstone/simulator dev",
+    "merge": "node packages/merger/src/cli.ts",
+    "ingest:edits": "node packages/merger/src/ingest-edits.ts",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test"
   }

@@ -1,0 +1,53 @@
+{
+  "inputs": [
+    "walks-windstone-001.geojson"
+  ],
+  "options": {
+    "cellSizeMeters": 1.5,
+    "bandwidthMeters": 3,
+    "densityFraction": 0.4,
+    "minSupport": 2,
+    "maxAccuracyMeters": 25,
+    "maxGapSeconds": 10,
+    "minSegmentMeters": 10,
+    "smoothingRadius": 1,
+    "outputSmoothingMeters": 3,
+    "pruneSpursMeters": 12,
+    "junctionMergeMeters": 8,
+    "simplifyMeters": 1
+  },
+  "stats": {
+    "duplicates": 0,
+    "droppedFixes": 0,
+    "cleanedRuns": 300,
+    "nodes": 33,
+    "junctions": 31
+  },
+  "score": {
+    "toleranceMeters": 5,
+    "precision": 1,
+    "recall": 0.9950874021795052,
+    "f1": 0.99753765282908,
+    "meanErrorMeters": 0.530512494987773,
+    "p95ErrorMeters": 1.656287896978799,
+    "truthLengthMeters": 8575.509390340789,
+    "mergedLengthMeters": 8274.9188145777,
+    "missingTruthMeters": 42.12802874062072,
+    "unsupportedMergedMeters": 0,
+    "topology": {
+      "junctionToleranceMeters": 10,
+      "matchedJunctions": 24,
+      "truthJunctions": 28,
+      "mergedJunctions": 31,
+      "junctionPrecision": 0.7741935483870968,
+      "junctionRecall": 0.8571428571428571,
+      "junctionF1": 0.8135593220338984,
+      "truthComponents": 1,
+      "mergedComponents": 1,
+      "truthEndpoints": 2,
+      "mergedEndpoints": 2,
+      "truthCycles": 19,
+      "mergedCycles": 18
+    }
+  }
+}

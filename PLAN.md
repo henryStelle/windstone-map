@@ -27,8 +27,8 @@ PWA (GitHub Pages)
 Repo
   ├─ traces/raw/*.geojson        raw exports, never edited
   ├─ data/trails.geojson         merged output (generated)
-  ├─ data/names.json             hand-edited, anchored names
-  ├─ data/landmarks.geojson      hand-edited
+  ├─ data/trail-names.geojson    named trail geometry from editor exports
+  ├─ data/landmarks.geojson      landmarks from editor exports
   └─ data/ingested.json          generated: ingested + rejected segment IDs
                                    │
 GitHub Action (on changes to traces/raw/)
@@ -85,6 +85,21 @@ With no server in v0, the published site is the acknowledgment.
 
 Maintainers (or contributors via GitHub's web upload) place files in `traces/raw/`.
 
+## Ingest editor edits
+
+The editor's **Download edits** action creates one version 1 `windstone-edits` JSON bundle containing `trailNames`, `landmarks`, and `walks` GeoJSON collections.
+
+```sh
+pnpm ingest:edits windstone-edits-<timestamp>.json --dry-run
+pnpm ingest:edits windstone-edits-<timestamp>.json
+```
+
+The script validates the complete bundle before writing. Named sections must match the current `data/trails.geojson`, allowing reversed geometry and rounding coordinates to seven decimal places. Unmatched sections, invalid landmarks, duplicate IDs, and malformed walk metadata abort ingestion.
+
+Names and landmarks replace their published collections, including deletions. Recorded walks retain all metadata in a content-addressed file under `traces/raw/`; importing the same walks again does not create another file. The input bundle is left unchanged. Use `--data-dir` and `--traces-dir` to target other directories.
+
+Ingestion does not regenerate trail geometry or mark walks as merged. When walks are included, run the merger separately with the full set of trace inputs.
+
 ## Merge algorithm
 
 Runs offline in Python or Node and from the Action. It rebuilds the whole map from all raw traces on every run. This avoids order dependence, and the algorithm can be improved later without migrating data. Trails are short, so performance isn't a concern.
@@ -103,8 +118,11 @@ Runs offline in Python or Node and from the Action. It rebuilds the whole map fr
 
 ## Names and landmarks
 
-- `data/landmarks.geojson`: hand-edited points.
-- `data/names.json`: names edited on a computer. Because merged geometry is regenerated, edge IDs are unstable. Each name stores a few anchor coordinates (or a short polyline) and is re-attached to the nearest merged edge on each run. Names that no longer match anything are flagged in the PR summary.
+- `data/landmarks.geojson`: named points published from editor exports.
+- `data/trail-names.geojson`: names edited on a computer, attached by exact segment geometry rather than unstable edge IDs. Ingestion rejects geometry that no longer matches. Tolerant geometry anchors that survive regeneration remain a future improvement.
+- **Create trail** and **Update trail** explicitly save both the name and selected sections; changing a selection does not autosave. Saving is blocked unless the selected sections form one connected component through graph junctions.
+- Landmarks have an optional `icon` property chosen through the editor's searchable, scrollable Lucide catalogue. The edit-icon button opens the picker; choosing an icon does not save until **Save landmark** is clicked. Map icons have a padded, borderless white circular background at 85% opacity and an invisible tap target. Missing or unknown icons display as a pin. Saving retains other landmark properties.
+- Published names and landmarks are compared with local drafts. Matching draft keys are removed; unsubmitted changes remain. **Download edits** is disabled when no saved map changes or unacknowledged walks remain. Downloading alone does not acknowledge a walk: only IDs in `data/ingested.json` under `ingested` or `rejected` are removed from IndexedDB.
 
 ## Viewer
 

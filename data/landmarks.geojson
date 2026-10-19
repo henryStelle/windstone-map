@@ -1,0 +1,53 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "af2fc125-2f3d-4a25-b4be-40aee2142f1a",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -76.11348279728716,
+          45.05192676577653
+        ]
+      },
+      "properties": {
+        "id": "af2fc125-2f3d-4a25-b4be-40aee2142f1a",
+        "name": "Beaver Pond",
+        "icon": "lookout"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "a8f3ebdd-b343-4e2f-9d4c-1810092d49ef",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -76.11709982426717,
+          45.05183672154587
+        ]
+      },
+      "properties": {
+        "id": "a8f3ebdd-b343-4e2f-9d4c-1810092d49ef",
+        "name": "The Portal",
+        "icon": "tent"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "6d5fbaef-ab02-4b00-8566-c6409d719b5b",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -76.1164979950726,
+          45.05727127922225
+        ]
+      },
+      "properties": {
+        "id": "6d5fbaef-ab02-4b00-8566-c6409d719b5b",
+        "name": "The Farm",
+        "icon": "home"
+      }
+    }
+  ]
+}
