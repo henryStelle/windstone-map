@@ -43,17 +43,18 @@
 .viewer-icon-button:hover { background: #f4f7f1; }
 .viewer-icon-button[aria-pressed='true'] { color: #fff; background: var(--viewer-green); }
 .viewer-icon-button:disabled { cursor: progress; opacity: 0.5; }
-.viewer-selection { position: absolute; left: 26px; bottom: 64px; display: flex; align-items: center; gap: 14px; width: min(310px, calc(100% - 52px)); padding: 15px; background: #fffffff5; border: 1px solid #d8dfd5; border-radius: 6px; box-shadow: 0 8px 24px #20352d12; }
+.viewer-selections { position: absolute; left: 26px; bottom: 64px; display: flex; flex-direction: column; gap: 8px; width: min(310px, calc(100% - 52px)); max-height: calc(100% - 80px); overflow-y: auto; }
+.viewer-selection { display: flex; align-items: center; flex-shrink: 0; gap: 14px; width: 100%; padding: 15px; background: #fffffff5; border: 1px solid #d8dfd5; border-radius: 6px; box-shadow: 0 8px 24px #20352d12; }
 .selection-line { align-self: stretch; flex: 0 0 4px; border-radius: 2px; background: #cf5a45; }
 .viewer-selection > div { flex: 1; min-width: 0; }
 .viewer-selection strong { display: block; margin: 3px 0; font-family: var(--viewer-heading); font-size: 21px; font-weight: 600; overflow-wrap: anywhere; }
+.viewer-selection strong a { color: inherit; text-decoration: none; }
+.viewer-selection strong a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.viewer-selection strong a:focus-visible { outline: 2px solid var(--viewer-green); outline-offset: 2px; }
 .viewer-selection-distance { display: block; margin-top: 8px; color: var(--viewer-muted); font-size: 11px; }
 .viewer-selection .viewer-icon-button { box-shadow: none; border: 0; background: transparent; }
 .selection-landmark { flex-shrink: 0; color: #a36e12; }
 .viewer-selection-description { margin: 5px 0 0; color: var(--viewer-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
-.viewer-trail-memberships ul { display: grid; gap: 5px; margin: 5px 0 0; padding: 0; list-style: none; }
-.viewer-trail-memberships a { color: var(--viewer-green); font-size: 12px; font-weight: 700; line-height: 1.5; text-underline-offset: 3px; overflow-wrap: anywhere; }
-.viewer-trail-memberships a:focus-visible { outline: 2px solid var(--viewer-green); outline-offset: 2px; }
 .viewer-message { position: absolute; left: 24px; right: 58px; top: 112px; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: fit-content; max-width: calc(100% - 82px); padding: 11px 13px; border: 1px solid #ded6c4; border-radius: 5px; color: #635637; background: #fffdf5; font-size: 12px; line-height: 1.5; }
 .trail-viewer button:focus-visible { outline: 2px solid var(--viewer-green); outline-offset: 2px; }
 .trail-viewer .maplibregl-ctrl-group { box-shadow: 0 0 0 1px #d2dcd2; }
@@ -81,5 +82,6 @@
   .trail-row { min-height: 57px; padding: 8px 10px; }
   .viewer-list { padding: 0 8px 8px; }
   .viewer-footer { padding: 8px 18px; }
-  .viewer-selection { left: 16px; bottom: 59px; width: min(290px, calc(100% - 74px)); padding: 11px; }
+  .viewer-selections { left: 16px; bottom: 59px; width: min(290px, calc(100% - 74px)); max-height: calc(100% - 75px); }
+  .viewer-selection { padding: 11px; }
 }

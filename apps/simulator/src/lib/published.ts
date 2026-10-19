@@ -1,4 +1,4 @@
-import namesJson from "../../../../data/trail-names.geojson?raw";
+import namesJson from "@map-data/trail-names.geojson?raw";
 import { applyNames } from "./editing";
 import { trails } from "./trails";
 

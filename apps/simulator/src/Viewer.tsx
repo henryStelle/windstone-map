@@ -13,7 +13,6 @@ import {
   ChevronUp,
   Expand,
   Map as MapIcon,
-  MapPin,
   Pencil,
   X,
 } from "lucide-react";
@@ -50,9 +49,23 @@ const EMPTY_RECORDINGS: FeatureCollection<LineString> = {
 const SELECTION_COLOR = "#cf5a45";
 const SELECTION_WIDTH = 6;
 const LANDMARK_RADIUS = 17;
+const TRAIL_SELECTION_COLORS = [
+  SELECTION_COLOR,
+  "#258be0",
+  "#f2c744",
+  "#bc65d8",
+  "#25b69a",
+];
+
+function trailSelectionColor(index: number) {
+  return (
+    TRAIL_SELECTION_COLORS[index] ?? `hsl(${(index * 137.508) % 360}, 75%, 60%)`
+  );
+}
 
 type Selection =
   | { kind: "trail" | "segment"; id: string }
+  | { kind: "trails"; ids: string[] }
   | {
       kind: "landmark";
       id: string;
@@ -91,13 +104,11 @@ export default function Viewer({
     selection?.kind === "segment"
       ? segments.find((segment) => segment.properties.id === selection.id)
       : undefined;
-  const choices = selectedSegment
-    ? namedTrails.filter((trail) =>
-        trail.segments.some(
-          (segment) => segment.properties.id === selectedSegment.properties.id,
-        ),
-      )
-    : [];
+  const choices =
+    selection?.kind === "trails"
+      ? namedTrails.filter((trail) => selection.ids.includes(trail.id))
+      : [];
+  const selectionTrails = selected ? [selected] : choices;
   const totalLength = trails.features.reduce(
     (sum, trail) => sum + trail.properties.lengthMeters,
     0,
@@ -149,7 +160,9 @@ export default function Viewer({
     setSelection(
       matches.length === 1
         ? { kind: "trail", id: matches[0].id }
-        : { kind: "segment", id },
+        : matches.length > 1
+          ? { kind: "trails", ids: matches.map((trail) => trail.id) }
+          : { kind: "segment", id },
     );
     if (matches.length > 0) setTab("trails");
   });
@@ -191,7 +204,7 @@ export default function Viewer({
                 "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
             ],
             tileSize: 256,
-            maxzoom: 19,
+            // maxzoom: 19,
             attribution:
               'Imagery &copy; <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noopener noreferrer">Esri and contributors</a>',
           },
@@ -395,10 +408,14 @@ export default function Viewer({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    const multipleTrails = highlightIds === undefined && choices.length > 1;
+    const selectionLayers: string[] = [];
     const segmentIds =
       highlightIds ??
       selected?.segments.map((segment) => segment.properties.id) ??
-      (selectedSegment ? [selectedSegment.properties.id] : []);
+      (selectedSegment && !multipleTrails
+        ? [selectedSegment.properties.id]
+        : []);
     const landmarkIds = selection?.kind === "landmark" ? [selection.id] : [];
     const select = () => {
       if (map.getLayer("selected-trail"))
@@ -407,6 +424,56 @@ export default function Viewer({
           ["get", "id"],
           ["literal", segmentIds],
         ]);
+      if (multipleTrails) {
+        const memberships = new Map<string, number[]>();
+        choices.forEach((trail, trailIndex) => {
+          for (const segment of trail.segments) {
+            const id = segment.properties.id;
+            const indices = memberships.get(id) ?? [];
+            indices.push(trailIndex);
+            memberships.set(id, indices);
+          }
+        });
+        const groups = new Map<string, { indices: number[]; ids: string[] }>();
+        for (const [id, indices] of memberships) {
+          const key = indices.join(",");
+          const group = groups.get(key) ?? { indices, ids: [] };
+          group.ids.push(id);
+          groups.set(key, group);
+        }
+        for (const [key, { indices, ids }] of groups) {
+          indices.forEach((trailIndex, slot) => {
+            const id = `selected-trail-${key}-${trailIndex}`;
+            const shared = indices.length > 1;
+            map.addLayer(
+              {
+                id,
+                type: "line",
+                source: "trails",
+                filter: ["in", ["get", "id"], ["literal", ids]],
+                layout: {
+                  "line-cap": shared ? "butt" : "round",
+                  "line-join": "round",
+                },
+                paint: {
+                  "line-color": trailSelectionColor(trailIndex),
+                  "line-width": SELECTION_WIDTH,
+                  ...(shared
+                    ? {
+                        "line-dasharray":
+                          slot === 0
+                            ? [2, 2 * (indices.length - 1)]
+                            : [0, 2 * slot, 2, 2 * (indices.length - slot - 1)],
+                      }
+                    : {}),
+                },
+              },
+              "recorded-walks",
+            );
+            selectionLayers.push(id);
+          });
+        }
+      }
       if (map.getLayer("selected-landmark"))
         map.setFilter("selected-landmark", [
           "in",
@@ -418,6 +485,9 @@ export default function Viewer({
     else map.once("load", select);
     return () => {
       map.off("load", select);
+      if (mapRef.current === map)
+        for (const id of selectionLayers)
+          if (map.getLayer(id)) map.removeLayer(id);
     };
   }, [highlightIds, segments, selection]);
 
@@ -598,7 +668,10 @@ export default function Viewer({
                         className="trail-row"
                         type="button"
                         key={trail.id}
-                        aria-pressed={selectedId === trail.id}
+                        aria-pressed={
+                          selectedId === trail.id ||
+                          choices.some((choice) => choice.id === trail.id)
+                        }
                         onClick={() => selectTrail(trail)}
                       >
                         <span className="trail-row-icon">
@@ -621,10 +694,7 @@ export default function Viewer({
                   aria-labelledby="places-tab"
                 >
                   {mapLandmarks.features.length === 0 ? (
-                    <div className="viewer-empty">
-                      <MapPin size={25} />
-                      <p>No landmarks added yet.</p>
-                    </div>
+                    <p className="viewer-empty">No landmarks added yet.</p>
                   ) : (
                     <div className="viewer-list">
                       {mapLandmarks.features.map((landmark, index) => (
@@ -688,68 +758,104 @@ export default function Viewer({
             <Expand size={19} />
           </button>
         </div>
-        {(selected || selectedSegment || selection?.kind === "landmark") && (
-          <div className="viewer-selection" aria-live="polite">
-            <span className="selection-line" aria-hidden="true" />
-            {selection?.kind === "landmark" && (
-              <LandmarkSymbol
-                icon={selection.icon}
-                className="selection-landmark"
-                size={24}
-              />
-            )}
-            <div>
-              {choices.length < 2 && (
-                <strong>
-                  {selection?.kind === "landmark"
-                    ? selection.name
-                    : (selected?.name ?? "Unnamed")}
-                </strong>
-              )}
-              {selection?.kind === "landmark" && selection.description && (
-                <p className="viewer-selection-description">
-                  {selection.description}
-                </p>
-              )}
-              {choices.length > 1 && (
-                <div className="viewer-trail-memberships">
-                  <span className="viewer-eyebrow">Part of:</span>
-                  <ul>
-                    {choices.map((trail) => (
-                      <li key={trail.id}>
-                        <a
-                          href={`#trail=${encodeURIComponent(trail.id)}`}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            selectTrail(trail);
-                          }}
-                        >
-                          {trail.name}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
+        {(selectionTrails.length > 0 ||
+          selectedSegment ||
+          selection?.kind === "landmark") && (
+          <div className="viewer-selections" aria-live="polite">
+            {selectionTrails.map((trail, index) => (
+              <div className="viewer-selection" key={trail.id}>
+                <span
+                  className="selection-line"
+                  style={{ backgroundColor: trailSelectionColor(index) }}
+                  aria-hidden="true"
+                />
+                <div>
+                  <strong>
+                    <a
+                      href={`#trail=${encodeURIComponent(trail.id)}`}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        selectTrail(trail);
+                      }}
+                    >
+                      {trail.name}
+                    </a>
+                  </strong>
+                  <span className="viewer-selection-distance">
+                    {formatDistance(trail.lengthMeters)}
+                  </span>
                 </div>
-              )}
-              {selection?.kind !== "landmark" && (
-                <span className="viewer-selection-distance">
-                  {formatDistance(
-                    selected?.lengthMeters ??
-                      selectedSegment?.properties.lengthMeters ??
-                      0,
+                <button
+                  type="button"
+                  className="viewer-icon-button"
+                  aria-label={
+                    selectionTrails.length > 1
+                      ? `Clear ${trail.name} selection`
+                      : "Clear selection"
+                  }
+                  title={
+                    selectionTrails.length > 1
+                      ? `Clear ${trail.name} selection`
+                      : "Clear selection"
+                  }
+                  onClick={() => {
+                    const remaining = selectionTrails.filter(
+                      (candidate) => candidate.id !== trail.id,
+                    );
+                    setSelection(
+                      remaining.length === 1
+                        ? { kind: "trail", id: remaining[0].id }
+                        : remaining.length > 1
+                          ? {
+                              kind: "trails",
+                              ids: remaining.map((candidate) => candidate.id),
+                            }
+                          : null,
+                    );
+                  }}
+                >
+                  <X size={17} />
+                </button>
+              </div>
+            ))}
+            {(selectedSegment || selection?.kind === "landmark") && (
+              <div className="viewer-selection">
+                <span className="selection-line" aria-hidden="true" />
+                {selection?.kind === "landmark" && (
+                  <LandmarkSymbol
+                    icon={selection.icon}
+                    className="selection-landmark"
+                    size={24}
+                  />
+                )}
+                <div>
+                  <strong>
+                    {selection?.kind === "landmark"
+                      ? selection.name
+                      : "Unnamed"}
+                  </strong>
+                  {selection?.kind === "landmark" && selection.description && (
+                    <p className="viewer-selection-description">
+                      {selection.description}
+                    </p>
                   )}
-                </span>
-              )}
-            </div>
-            <button
-              type="button"
-              className="viewer-icon-button"
-              aria-label="Clear selection"
-              title="Clear selection"
-              onClick={() => setSelection(null)}
-            >
-              <X size={17} />
-            </button>
+                  {selectedSegment && (
+                    <span className="viewer-selection-distance">
+                      {formatDistance(selectedSegment.properties.lengthMeters)}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="viewer-icon-button"
+                  aria-label="Clear selection"
+                  title="Clear selection"
+                  onClick={() => setSelection(null)}
+                >
+                  <X size={17} />
+                </button>
+              </div>
+            )}
           </div>
         )}
         {message && (

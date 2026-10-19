@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appendPosition, unacknowledgedSegments } from "./useRecorder";
-import ingestedJson from "../../../../data/ingested.json?raw";
+import ingestedJson from "../../../../data/recorded-002/output/ingested.json?raw";
 
 function fix(timestamp: number, longitude = -76.116): GeolocationPosition {
   return {

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import type { FeatureCollection, Position } from "geojson";
@@ -66,27 +66,7 @@ function uniqueId(value: unknown, ids: Set<string>, label: string) {
   ids.add(value);
 }
 
-async function ingest() {
-  const { values, positionals } = parseArgs({
-    allowPositionals: true,
-    options: {
-      "data-dir": { type: "string" },
-      "traces-dir": { type: "string" },
-      "dry-run": { type: "boolean" },
-      help: { type: "boolean" },
-    },
-  });
-  if (values.help) {
-    console.log(
-      "Usage: pnpm ingest:edits <windstone-edits.json> [--dry-run] [--data-dir data] [--traces-dir traces/raw]",
-    );
-    return;
-  }
-  if (positionals.length !== 1)
-    throw new Error(
-      "Provide one edits file: pnpm ingest:edits <windstone-edits.json> [--dry-run]",
-    );
-  const input = resolve(positionals[0]);
+async function prepareEdits(input: string, dataDir: string, tracesDir: string) {
   const edits: unknown = JSON.parse(await readFile(input, "utf8"));
   if (
     !record(edits) ||
@@ -100,14 +80,13 @@ async function ingest() {
   const names = collection(edits.trailNames, "trail names");
   const landmarks = collection(edits.landmarks, "landmarks");
   const walks = collection(edits.walks, "walks");
-  const dataDir = resolve(values["data-dir"] ?? resolve(root, "data"));
-  const tracesDir = resolve(
-    values["traces-dir"] ?? resolve(root, "traces/raw"),
-  );
-  const network = collection(
-    JSON.parse(await readFile(resolve(dataDir, "trails.geojson"), "utf8")),
-    "trail network",
-  );
+  const network: FeatureCollection = await readFile(resolve(dataDir, "trails.geojson"), "utf8")
+    .then((content) => collection(JSON.parse(content), "trail network"))
+    .catch((error: unknown) => {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT")
+        return { type: "FeatureCollection", features: [] };
+      throw error;
+    });
   const known = new Set(
     network.features.map((feature) => {
       if (
@@ -214,12 +193,89 @@ async function ingest() {
   }
   if (outputs.has(input))
     throw new Error("Output would overwrite the input edits bundle.");
-  console.log(
-    `${values["dry-run"] ? "Validated" : "Ingesting"} ${names.features.length} trail names (${sections} sections), ${landmarks.features.length} landmarks, ${walks.features.length} recorded walks.`,
+  return {
+    input,
+    exportedAt: Date.parse(edits.exportedAt),
+    names,
+    landmarks,
+    walks,
+    sections,
+    outputs,
+    rawPath,
+  };
+}
+
+async function ingest() {
+  const { values, positionals } = parseArgs({
+    allowPositionals: true,
+    options: {
+      "input-dir": { type: "string" },
+      "data-dir": { type: "string" },
+      "traces-dir": { type: "string" },
+      "dry-run": { type: "boolean" },
+      help: { type: "boolean" },
+    },
+  });
+  if (values.help) {
+    console.log(
+      "Usage: pnpm ingest:edits [file.json ...] [--dry-run] [--input-dir directory] [--data-dir directory] [--traces-dir directory]\nDefaults to recordings/exports/ bundles, production/ map data, and recordings/raw/ walks. Development fixtures require a separate --data-dir and --traces-dir. All walks are preserved; the newest export supplies names and landmarks.",
+    );
+    return;
+  }
+  const production = resolve(root, "production");
+  const inputDir = resolve(values["input-dir"] ?? resolve(root, "recordings/exports"));
+  const inputs = positionals.length
+    ? positionals.map((path) => resolve(path))
+    : (await readdir(inputDir, { withFileTypes: true }).catch((error: unknown) => {
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") return [];
+        throw error;
+      }))
+        .filter(
+          (entry) =>
+            entry.isFile() && /^windstone-edits.*\.json$/i.test(entry.name),
+        )
+        .map((entry) => resolve(inputDir, entry.name))
+        .sort();
+  if (!inputs.length)
+    throw new Error(
+      `No Windstone edit bundles found in ${inputDir}. Add windstone-edits*.json files or provide explicit file paths. No edits were saved.`,
+    );
+  const dataDir = resolve(values["data-dir"] ?? production);
+  const tracesDir = resolve(values["traces-dir"] ?? resolve(root, "recordings/raw"));
+  if (
+    inputs.some((path) => path.startsWith(`${resolve(root, "data")}${sep}`)) &&
+    (dataDir === production || tracesDir === resolve(root, "recordings/raw"))
+  )
+    throw new Error("Development fixtures cannot be ingested into production. Use separate --data-dir and --traces-dir.");
+  const batches = await Promise.all(
+    inputs.map((input) => prepareEdits(input, dataDir, tracesDir)),
   );
+  batches.sort(
+    (first, second) =>
+      first.exportedAt - second.exportedAt ||
+      first.input.localeCompare(second.input),
+  );
+  const outputs = new Map<string, string>();
+  const rawPaths = new Set<string>();
+  for (const batch of batches) {
+    for (const [path, content] of batch.outputs) outputs.set(path, content);
+    if (batch.rawPath) rawPaths.add(batch.rawPath);
+  }
+  if (inputs.some((input) => outputs.has(input)))
+    throw new Error("Output would overwrite an input edits bundle.");
+  for (const batch of batches) {
+    console.log(
+      `${values["dry-run"] ? "Validated" : "Ingesting"} ${batch.names.features.length} trail names (${batch.sections} sections), ${batch.landmarks.features.length} landmarks, ${batch.walks.features.length} recorded walks from ${batch.input}.`,
+    );
+  }
+  if (batches.length > 1)
+    console.log(
+      `Using names and landmarks from the newest export: ${batches.at(-1)!.input}.`,
+    );
   if (values["dry-run"]) return;
-  if (rawPath) {
-    await mkdir(tracesDir, { recursive: true });
+  await mkdir(dataDir, { recursive: true });
+  if (rawPaths.size) await mkdir(tracesDir, { recursive: true });
+  for (const rawPath of rawPaths) {
     const content = outputs.get(rawPath)!;
     try {
       await writeFile(rawPath, content, { flag: "wx" });

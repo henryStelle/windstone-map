@@ -21,7 +21,7 @@ export const DEFAULT_OPTIONS: MergeOptions = {
   cellSizeMeters: 1.5,
   bandwidthMeters: 3,
   densityFraction: 0.4,
-  minSupport: 2,
+  minSupport: 1,
   maxAccuracyMeters: 25,
   maxGapSeconds: 10,
   minSegmentMeters: 10,
@@ -65,7 +65,7 @@ export function mergeTraces(
     options.bandwidthMeters === 0 ||
     options.maxAccuracyMeters === 0 ||
     options.maxGapSeconds === 0 ||
-    options.minSupport < 2 ||
+    options.minSupport < 1 ||
     options.densityFraction > 1 ||
     !Number.isInteger(options.smoothingRadius) ||
     !Number.isInteger(options.minSupport)
@@ -598,8 +598,11 @@ function extractEdges(
       const leaf =
         (degrees.get(edge.from) === 1 && degrees.get(edge.to)! > 1) ||
         (degrees.get(edge.to) === 1 && degrees.get(edge.from)! > 1);
+      const isolated =
+        degrees.get(edge.from) === 1 && degrees.get(edge.to) === 1;
       const remove =
         edge.support < options.minSupport ||
+        (isolated && length < options.minSegmentMeters) ||
         (leaf && length < options.pruneSpursMeters);
       if (remove) changed = true;
       return !remove;

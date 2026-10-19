@@ -1,7 +1,7 @@
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import type { TrailProperties } from "@windstone/merger";
-import trailsJson from "../../../../data/trails.geojson?raw";
-import landmarksJson from "../../../../data/landmarks.geojson?raw";
+import trailsJson from "@map-data/trails.geojson?raw";
+import landmarksJson from "@map-data/landmarks.geojson?raw";
 
 export type Trail = Feature<
   LineString,

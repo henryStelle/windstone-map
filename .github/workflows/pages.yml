@@ -26,6 +26,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Test production data isolation
+        run: pnpm --filter @windstone/simulator test:production
       - name: Test
         run: pnpm test
       - name: Build

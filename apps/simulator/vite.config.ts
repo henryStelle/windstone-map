@@ -1,12 +1,37 @@
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const useFixtures = ["development", "test", "fixtures"].includes(mode);
+  const fixtureDirectory = fileURLToPath(new URL("../../data/", import.meta.url));
+  return {
   base: process.env.BASE_PATH || "/",
+  resolve: {
+    alias: {
+      "@map-data": fileURLToPath(new URL(
+        useFixtures ? "../../data/recorded-002/output/" : "../../production/",
+        import.meta.url,
+      )),
+    },
+  },
   plugins: [
     react(),
+    {
+      name: "exclude-development-data",
+      generateBundle(_options, bundle) {
+        if (useFixtures) return;
+        for (const output of Object.values(bundle)) {
+          if (output.type !== "chunk") continue;
+          for (const id of Object.keys(output.modules)) {
+            if (id.startsWith(fixtureDirectory))
+              this.error(`Development dataset in production build: ${id}`);
+          }
+        }
+      },
+    },
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
@@ -34,4 +59,5 @@ export default defineConfig({
       },
     }),
   ],
+  };
 });

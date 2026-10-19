@@ -27,8 +27,7 @@ import type {
   MergeResponse,
   MergeSuccess,
 } from "./lib/merge.worker";
-import truthFixtureUrl from "../../../truth.geojson?url";
-import walksFixtureUrl from "../../../walks-windstone-001.geojson?url";
+import { loadTestDataset, TEST_DATASETS } from "./lib/datasets";
 import {
   connectNodes,
   EMPTY_GRAPH,
@@ -69,6 +68,9 @@ function App() {
   const [mergeResult, setMergeResult] = useState<MergeSuccess | null>(null);
   const [isMerging, setIsMerging] = useState(false);
   const [isLoadingFixtures, setIsLoadingFixtures] = useState(false);
+  const [selectedDataset, setSelectedDataset] = useState(
+    TEST_DATASETS[0]?.id ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
   const [visibility, setVisibility] = useState({
     truth: true,
@@ -174,12 +176,12 @@ function App() {
     map.setPaintProperty(
       "simulated-walks",
       "line-opacity",
-      walkView === "single" ? 0.95 : 0.2,
+      walkView === "single" ? 0.95 : walks.features.length < 20 ? 0.65 : 0.2,
     );
     map.setPaintProperty(
       "simulated-walks",
       "line-width",
-      walkView === "single" ? 3 : 1.2,
+      walkView === "single" ? 3 : walks.features.length < 20 ? 2 : 1.2,
     );
     map.moveLayer(
       "simulated-walks",
@@ -311,7 +313,7 @@ function App() {
     historyRef.current.push(current);
     setGraph(next);
     setActiveNodeId(nextNodeId);
-    replaceWalks(EMPTY_WALKS);
+    resetMerge();
   }
 
   function generate() {
@@ -331,7 +333,7 @@ function App() {
     if (!previous) return;
     setGraph(previous);
     setActiveNodeId(null);
-    replaceWalks(EMPTY_WALKS);
+    resetMerge();
   }
 
   function clear() {
@@ -343,7 +345,8 @@ function App() {
     historyRef.current.push(graph);
     setGraph(EMPTY_GRAPH);
     setActiveNodeId(null);
-    replaceWalks(EMPTY_WALKS);
+    setTruthEditing(true);
+    resetMerge();
   }
 
   async function importTruth(event: ChangeEvent<HTMLInputElement>) {
@@ -354,7 +357,7 @@ function App() {
       historyRef.current.push(graph);
       setGraph(imported);
       setActiveNodeId(null);
-      replaceWalks(EMPTY_WALKS);
+      resetMerge();
     } catch {
       window.alert("That file is not valid GeoJSON.");
     } finally {
@@ -383,34 +386,27 @@ function App() {
     if (
       (graph.nodes.length > 0 || walks.features.length > 0) &&
       !window.confirm(
-        "Replace the current truth and walks with the project fixtures?",
+        `Replace the current truth and walks with ${selectedDataset}?`,
       )
     )
       return;
     setIsLoadingFixtures(true);
-    setError(null);
-    setTruthEditing(false);
+    resetMerge();
     try {
-      const [truth, savedWalks] = await Promise.all(
-        [truthFixtureUrl, walksFixtureUrl].map(async (url) => {
-          const response = await fetch(url);
-          if (!response.ok)
-            throw new Error(
-              `Unable to load project fixtures (${response.status}).`,
-            );
-          return response.json();
-        }),
-      );
-      const imported = graphFromGeoJson(truth);
-      const importedWalks = walksFromGeoJson(savedWalks);
-      if (imported.edges.length === 0)
-        throw new Error("The project truth fixture has no trail edges.");
+      const { graph: imported, walks: importedWalks } =
+        await loadTestDataset(selectedDataset);
       historyRef.current.push(graph);
       setGraph(imported);
+      setActiveNodeId(null);
       replaceWalks(importedWalks);
+      setWalkView("all");
+      setTruthEditing(true);
       setVisibility({ truth: true, walks: true, merged: true });
       const bounds = new maplibregl.LngLatBounds();
       for (const node of imported.nodes) bounds.extend(node.coordinate);
+      for (const walk of importedWalks.features)
+        for (const coordinate of walk.geometry.coordinates)
+          bounds.extend([coordinate[0], coordinate[1]]);
       mapRef.current?.fitBounds(bounds, {
         padding: 48,
         maxZoom: 18,
@@ -420,7 +416,7 @@ function App() {
       setError(
         failure instanceof Error
           ? failure.message
-          : "Unable to load project fixtures.",
+          : "Unable to load test dataset.",
       );
     } finally {
       setIsLoadingFixtures(false);
@@ -507,16 +503,30 @@ function App() {
               onChange={importTruth}
             />
           </div>
+          <label className="field-label" htmlFor="test-dataset">
+            Test dataset
+          </label>
+          <select
+            id="test-dataset"
+            className="text-input"
+            value={selectedDataset}
+            disabled={isLoadingFixtures}
+            onChange={(event) => setSelectedDataset(event.target.value)}
+          >
+            {TEST_DATASETS.map((dataset) => (
+              <option key={dataset.id} value={dataset.id}>
+                {dataset.id}
+              </option>
+            ))}
+          </select>
           <button
             className="secondary-button fixture-button"
             type="button"
             onClick={loadProjectFixtures}
-            disabled={isLoadingFixtures}
+            disabled={isLoadingFixtures || !selectedDataset}
           >
             <FolderOpen size={16} />{" "}
-            {isLoadingFixtures
-              ? "Loading fixtures..."
-              : "Load project fixtures"}
+            {isLoadingFixtures ? "Loading dataset..." : "Load test dataset"}
           </button>
         </section>
 
@@ -785,7 +795,11 @@ function App() {
         </section>
       </aside>
 
-      <section className="map-stage">
+      <section
+        className="map-stage"
+        aria-label="Trail simulator map"
+        aria-busy={!mapReady}
+      >
         <div ref={mapContainerRef} className="map" />
         <div className="map-caption">
           <LocateFixed size={14} />

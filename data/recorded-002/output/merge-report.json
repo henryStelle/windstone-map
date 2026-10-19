@@ -1,0 +1,27 @@
+{
+  "inputs": [
+    "data/recorded-002/walks.geojson"
+  ],
+  "options": {
+    "cellSizeMeters": 1.5,
+    "bandwidthMeters": 3,
+    "densityFraction": 0.4,
+    "minSupport": 1,
+    "maxAccuracyMeters": 25,
+    "maxGapSeconds": 10,
+    "minSegmentMeters": 10,
+    "smoothingRadius": 1,
+    "outputSmoothingMeters": 3,
+    "pruneSpursMeters": 12,
+    "junctionMergeMeters": 8,
+    "simplifyMeters": 1
+  },
+  "stats": {
+    "duplicates": 0,
+    "droppedFixes": 0,
+    "cleanedRuns": 3,
+    "nodes": 2,
+    "junctions": 0
+  },
+  "score": null
+}

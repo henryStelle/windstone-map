@@ -1,6 +1,7 @@
 import type { FeatureCollection, LineString } from "geojson";
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { discoverDatasets } from "./datasets.ts";
 import { evaluateNetwork } from "./evaluate.ts";
 import { mergeTraces } from "./merge.ts";
 import { generateWalks } from "../../../apps/simulator/src/lib/generator.ts";
@@ -16,6 +17,52 @@ function lines(coordinates: number[][][]): FeatureCollection<LineString> {
     })),
   };
 }
+
+const dataDirectory = new URL("../../../data/", import.meta.url);
+const datasets = discoverDatasets(
+  globSync("*/*.geojson", { cwd: dataDirectory }),
+);
+
+function readCollections(paths: string[]): FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: paths.flatMap((path) => {
+      const collection: FeatureCollection = JSON.parse(
+        readFileSync(new URL(path, dataDirectory), "utf8"),
+      );
+      return collection.features;
+    }),
+  };
+}
+
+describe("dataset discovery", () => {
+  it("groups truth prefixes and unlabeled walks without following output folders", () => {
+    expect(
+      discoverDatasets([
+        "example/walks.geojson",
+        "example/truth-corrected.geojson",
+        "example/another-recording.geojson",
+        "example/output/trails.geojson",
+        "example/source/edits.json",
+      ]),
+    ).toEqual([
+      {
+        id: "example",
+        truth: ["example/truth-corrected.geojson"],
+        walks: ["example/another-recording.geojson", "example/walks.geojson"],
+      },
+    ]);
+  });
+
+  it("does not reject incomplete test sets", () => {
+    expect(() => discoverDatasets(["example/walk.geojson"])).not.toThrow(
+      "missing truth*.geojson",
+    );
+    expect(() => discoverDatasets(["example/truth.geojson"])).not.toThrow(
+      "missing walk GeoJSON",
+    );
+  });
+});
 
 describe("network evaluation", () => {
   const truth = lines([
@@ -157,18 +204,61 @@ describe("trace merging", () => {
     expect(score.recall).toBeGreaterThan(0.9);
   });
 
-  it("deduplicates segments, is input-order independent, and requires independent support", () => {
+  it("deduplicates segments, is input-order independent, and honors configured support", () => {
     const input = traces([line, [...line].reverse()]);
     const forward = mergeTraces(input);
     expect(
       mergeTraces({ ...input, features: [...input.features].reverse() }).trails,
     ).toEqual(forward.trails);
+    const duplicate = mergeTraces(
+      { ...input, features: [input.features[0], input.features[0]] },
+      { minSupport: 2 },
+    );
+    expect(duplicate.stats.duplicates).toBe(1);
+    expect(duplicate.trails.features).toHaveLength(0);
+  });
+
+  it("accepts a single walk and deduplicates copies without dropping the trail", () => {
+    const input = traces([line]);
+    const single = mergeTraces(input);
     const duplicate = mergeTraces({
       ...input,
       features: [input.features[0], input.features[0]],
     });
+    expect(single.trails.features).toHaveLength(1);
+    expect(single.trails.features[0].properties.support).toBe(1);
+    expect(
+      evaluateNetwork(single.trails, lines([line])).recall,
+    ).toBeGreaterThan(0.99);
     expect(duplicate.stats.duplicates).toBe(1);
-    expect(duplicate.trails.features).toHaveLength(0);
+    expect(duplicate.trails).toEqual(single.trails);
+  });
+
+  it("retains singly recorded connections by default", () => {
+    const complete = [
+      [0, 0],
+      [0.003, 0],
+    ];
+    const input = traces([
+      complete,
+      [
+        [0, 0],
+        [0.001, 0],
+      ],
+      [
+        [0.002, 0],
+        [0.003, 0],
+      ],
+    ]);
+    const result = mergeTraces(input);
+    expect(result.trails.features).toHaveLength(1);
+    expect(result.trails.features[0].properties.support).toBe(1);
+    expect(
+      evaluateNetwork(result.trails, lines([complete])).recall,
+    ).toBeGreaterThan(0.99);
+    expect(mergeTraces(input, { minSupport: 2 }).trails.features).toHaveLength(
+      2,
+    );
   });
 
   it("never draws across a recording gap or a low-accuracy fix", () => {
@@ -244,74 +334,73 @@ describe("trace merging", () => {
 });
 
 describe("output smoothing", () => {
-  it("reduces zigzags on a noisy straight trail without moving its graph endpoints", () => {
-    const truth = lines([
-      [
-        [0, 0],
-        [0.004, 0.001],
-      ],
-    ]);
-    const walks = generateWalks(graphFromGeoJson(truth), {
-      count: 25,
-      noiseMeters: 5,
-      sampleSpacingMeters: 6,
-      seed: "smoothing-straight",
-    });
-    const original = mergeTraces(walks, { outputSmoothingMeters: 0 });
-    const smoothed = mergeTraces(walks);
-    const turning = (collection: FeatureCollection<LineString>) =>
-      collection.features.reduce((sum, feature) => {
-        const coordinates = feature.geometry.coordinates;
-        for (let index = 1; index < coordinates.length - 1; index += 1) {
-          const before = coordinates[index - 1];
-          const point = coordinates[index];
-          const after = coordinates[index + 1];
-          const firstX = point[0] - before[0];
-          const firstY = point[1] - before[1];
-          const secondX = after[0] - point[0];
-          const secondY = after[1] - point[1];
-          sum += Math.abs(
-            Math.atan2(
-              firstX * secondY - firstY * secondX,
-              firstX * secondX + firstY * secondY,
-            ),
-          );
-        }
-        return sum;
-      }, 0);
-    expect(original.trails.features).toHaveLength(1);
-    expect(turning(original.trails)).toBeGreaterThan(0);
-    expect(turning(smoothed.trails)).toBeLessThan(
-      turning(original.trails) * 0.7,
-    );
-    expect(smoothed.stats).toEqual(original.stats);
-    for (const [index, feature] of smoothed.trails.features.entries()) {
-      const before = original.trails.features[index];
-      expect(feature.properties.from).toBe(before.properties.from);
-      expect(feature.properties.to).toBe(before.properties.to);
-      expect(feature.geometry.coordinates[0]).toEqual(
-        before.geometry.coordinates[0],
+  it.each([1, 25])(
+    "reduces zigzags from %i walks without moving graph endpoints",
+    (count) => {
+      const truth = lines([
+        [
+          [0, 0],
+          [0.004, 0.001],
+        ],
+      ]);
+      const walks = generateWalks(graphFromGeoJson(truth), {
+        count,
+        noiseMeters: 5,
+        sampleSpacingMeters: 6,
+        seed: "smoothing-straight",
+      });
+      const original = mergeTraces(walks, { outputSmoothingMeters: 0 });
+      const smoothed = mergeTraces(walks);
+      const turning = (collection: FeatureCollection<LineString>) =>
+        collection.features.reduce((sum, feature) => {
+          const coordinates = feature.geometry.coordinates;
+          for (let index = 1; index < coordinates.length - 1; index += 1) {
+            const before = coordinates[index - 1];
+            const point = coordinates[index];
+            const after = coordinates[index + 1];
+            const firstX = point[0] - before[0];
+            const firstY = point[1] - before[1];
+            const secondX = after[0] - point[0];
+            const secondY = after[1] - point[1];
+            sum += Math.abs(
+              Math.atan2(
+                firstX * secondY - firstY * secondX,
+                firstX * secondX + firstY * secondY,
+              ),
+            );
+          }
+          return sum;
+        }, 0);
+      expect(original.trails.features).toHaveLength(1);
+      expect(turning(original.trails)).toBeGreaterThan(0);
+      expect(turning(smoothed.trails)).toBeLessThan(
+        turning(original.trails) * 0.7,
       );
-      expect(feature.geometry.coordinates.at(-1)).toEqual(
-        before.geometry.coordinates.at(-1),
+      expect(smoothed.stats).toEqual(original.stats);
+      for (const [index, feature] of smoothed.trails.features.entries()) {
+        const before = original.trails.features[index];
+        expect(feature.properties.from).toBe(before.properties.from);
+        expect(feature.properties.to).toBe(before.properties.to);
+        expect(feature.geometry.coordinates[0]).toEqual(
+          before.geometry.coordinates[0],
+        );
+        expect(feature.geometry.coordinates.at(-1)).toEqual(
+          before.geometry.coordinates.at(-1),
+        );
+        expect(feature.properties.lengthMeters).toBeLessThan(
+          before.properties.lengthMeters,
+        );
+      }
+      expect(evaluateNetwork(smoothed.trails, truth).f1).toBeGreaterThan(
+        count === 1 ? 0.9 : 0.99,
       );
-      expect(feature.properties.lengthMeters).toBeLessThan(
-        before.properties.lengthMeters,
-      );
-    }
-    expect(evaluateNetwork(smoothed.trails, truth).f1).toBeGreaterThan(0.99);
-  });
+    },
+  );
 
   it("preserves shared junctions and improves saved-network geometry", () => {
-    const truth = JSON.parse(
-      readFileSync(new URL("../../../truth.geojson", import.meta.url), "utf8"),
-    );
-    const walks = JSON.parse(
-      readFileSync(
-        new URL("../../../walks-windstone-001.geojson", import.meta.url),
-        "utf8",
-      ),
-    );
+    const dataset = datasets.find((entry) => entry.id === "windstone-001")!;
+    const truth = readCollections(dataset.truth);
+    const walks = readCollections(dataset.walks);
     const original = mergeTraces(walks, { outputSmoothingMeters: 0 });
     const smoothed = mergeTraces(walks);
     expect(smoothed.stats).toEqual(original.stats);
@@ -330,16 +419,52 @@ describe("output smoothing", () => {
   }, 30_000);
 });
 
-describe("root fixture accuracy", () => {
-  const truth: FeatureCollection = JSON.parse(
-    readFileSync(new URL("../../../truth.geojson", import.meta.url), "utf8"),
-  );
-  const fixture: FeatureCollection = JSON.parse(
-    readFileSync(
-      new URL("../../../walks-windstone-001.geojson", import.meta.url),
-      "utf8",
-    ),
-  );
+describe("paired fixture accuracy", () => {
+  it("discovers truth and walk pairings", () => {
+    expect(datasets.length).toBeGreaterThanOrEqual(2);
+  });
+
+  for (const dataset of datasets) {
+    it(`${dataset.id} exceeds 90% coverage within 10 meters`, () => {
+      const truth = readCollections(dataset.truth);
+      const fixture = readCollections(dataset.walks);
+      const walks: FeatureCollection = {
+        ...fixture,
+        features: fixture.features.map((feature) => ({
+          ...feature,
+          properties: {
+            id: feature.properties?.id ?? feature.id,
+            times: feature.properties?.times,
+            accuracies: feature.properties?.accuracies,
+          },
+        })),
+      };
+      const result = mergeTraces(walks);
+      const score = evaluateNetwork(result.trails, truth, 10);
+      const strict = evaluateNetwork(result.trails, truth);
+      console.table([
+        {
+          pairing: dataset.id,
+          toleranceMeters: score.toleranceMeters,
+          coverage: score.recall,
+          precision: score.precision,
+          coverageAt5Meters: strict.recall,
+          missingTruthMeters: score.missingTruthMeters,
+          components: score.topology.mergedComponents,
+        },
+      ]);
+      expect(score.recall).toBeGreaterThan(0.9);
+      expect(score.topology.mergedComponents).toBe(
+        score.topology.truthComponents,
+      );
+    }, 30_000);
+  }
+});
+
+describe("simulation fixture accuracy", () => {
+  const dataset = datasets.find((entry) => entry.id === "windstone-001")!;
+  const truth = readCollections(dataset.truth);
+  const fixture = readCollections(dataset.walks);
 
   it("recovers the source network without using simulator labels", () => {
     const clean = {

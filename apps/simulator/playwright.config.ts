@@ -1,11 +1,15 @@
 import { defineConfig } from "@playwright/test";
 
+const production = process.env.PLAYWRIGHT_PRODUCTION === "1";
+const port = production ? 5174 : 5173;
+const baseURL = `http://127.0.0.1:${port}`;
+
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "**/*.pw.ts",
+  testMatch: production ? "**/production.pw.ts" : "**/viewer.pw.ts",
   fullyParallel: true,
   use: {
-    baseURL: "http://127.0.0.1:5173",
+    baseURL,
     browserName: "chromium",
     reducedMotion: "reduce",
     screenshot: "only-on-failure",
@@ -22,10 +26,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command:
-      "pnpm build && pnpm preview --host 127.0.0.1 --port 5173 --strictPort",
-    url: "http://127.0.0.1:5173",
-    reuseExistingServer: !process.env.CI,
+    command: `pnpm exec vite build --mode ${production ? "production" : "fixtures"} && pnpm preview --host 127.0.0.1 --port ${port} --strictPort`,
+    url: baseURL,
+    reuseExistingServer: !process.env.CI && !production,
     timeout: 60_000,
   },
 });

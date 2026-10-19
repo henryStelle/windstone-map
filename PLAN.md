@@ -2,6 +2,19 @@
 
 A simple, offline-capable map of the trails at the non-profit, with a few landmarks. Contributors record walks in the PWA; a merge algorithm turns the raw traces into a trail map. No backend in v0: static site on GitHub Pages, data committed to the repo.
 
+## Current Test Setup
+
+Production starts empty under `production/`; see [production/README.md](production/README.md).
+Development datasets live in `data/<test-set>/`;
+see [data/README.md](data/README.md). Each set contains `truth*.geojson` plus walk
+GeoJSON files. Generated demonstration data lives in `data/recorded-002/output/`,
+and its original editor export is archived under `data/recorded-002/source/`.
+The development simulator discovers these folders automatically and preserves
+walks when truth is edited, cleared, undone, or imported. It and its datasets
+are excluded from production builds. Production CLI defaults use
+`recordings/exports/`, `recordings/raw/`, and `production/`. The ingestion Action
+below is planned; the current Pages workflow tests and deploys committed output.
+
 ## Goals and non-goals
 
 **Goals**
@@ -27,14 +40,14 @@ PWA (GitHub Pages)
                                    │ (maintainer or contributor adds file)
                                    ▼
 Repo
-  ├─ traces/raw/*.geojson        raw exports, never edited
-  ├─ data/trails.geojson         merged output (generated)
-  ├─ data/trail-names.geojson    named trail geometry from editor exports
-  ├─ data/landmarks.geojson      landmarks from editor exports
-  └─ data/ingested.json          generated: ingested + rejected segment IDs
+  ├─ recordings/raw/*.geojson    production raw recordings, never edited
+  ├─ production/trails.geojson   merged output (generated)
+  ├─ production/trail-names.geojson named trail geometry from editor exports
+  ├─ production/landmarks.geojson landmarks from editor exports
+  └─ production/ingested.json    generated: ingested + rejected segment IDs
                                    │
-GitHub Action (on changes to traces/raw/)
-  └─ runs merge -> opens PR with regenerated data/ files
+Planned GitHub Action (on changes to recordings/raw/)
+  └─ runs merge -> opens PR with regenerated production/ files
 ```
 
 The PR reviews the merged map diff. That is the quality gate.
@@ -93,16 +106,25 @@ Maintainers (or contributors via GitHub's web upload) place files in `traces/raw
 
 The editor's **Download edits** action creates one version 1 `windstone-edits` JSON bundle containing `trailNames`, `landmarks`, and `walks` GeoJSON collections.
 
+Place production `windstone-edits*.json` bundles in `recordings/exports/`, then run:
+
 ```sh
-pnpm ingest:edits windstone-edits-<timestamp>.json --dry-run
-pnpm ingest:edits windstone-edits-<timestamp>.json
+pnpm ingest:edits --dry-run
+pnpm ingest:edits
+pnpm merge
 ```
 
-The script validates the complete bundle before writing. Named sections must match the current `data/trails.geojson`, allowing reversed geometry and rounding coordinates to seven decimal places. Unmatched sections, invalid landmarks, duplicate IDs, and malformed walk metadata abort ingestion.
+Without file arguments, ingestion scans `recordings/exports/` for `windstone-edits*.json`. It validates every discovered bundle before writing anything. Named sections must match `production/trails.geojson`, allowing reversed geometry and rounding coordinates to seven decimal places. A missing or empty map is valid for first recordings without named trails. Unmatched sections, invalid landmarks, duplicate IDs, and malformed walk metadata abort the entire batch. Missing bundles also stop without changing production data.
 
-Names and landmarks replace their published collections, including deletions. Recorded walks retain all metadata in a content-addressed file under `traces/raw/`; importing the same walks again does not create another file. The input bundle is left unchanged. Use `--data-dir` and `--traces-dir` to target other directories.
+Names and landmarks replace their production collections, including deletions. When multiple bundles are supplied, the newest `exportedAt` timestamp determines the snapshot, while walks from every bundle are retained. Recorded walks retain all metadata in content-addressed files under `recordings/raw/`; repeated imports do not create duplicate files. Input bundles are left unchanged. Explicit file paths still work (`pnpm ingest:edits file.json other-file.json`). Use `--input-dir`, `--data-dir`, and `--traces-dir` to target other directories. Development bundles require explicit separate outputs.
 
-Ingestion does not regenerate trail geometry or mark walks as merged. When walks are included, run the merger separately with the full set of trace inputs.
+Ingestion does not regenerate trail geometry or mark walks as merged. `pnpm merge` reads walk collections from `recordings/raw/`, excluding `truth*.geojson` and the `output/`, `source/`, and `rejected/` directories. It prints the files used, then writes the generated map, acknowledgment IDs, and report to `production/`. If no walk files exist, it creates or resets trails, names, landmarks, acknowledgment IDs, and the report to empty output. Invalid source files still fail without changing existing output. Keep historical walks because merging rebuilds the whole network each time. Files under `data/` cannot be published to production outputs.
+
+Use `--traces-dir` to change the discovery directory, repeat `--input` to choose files explicitly, or use `--out-dir` for a separate output directory. Merging no longer silently uses the simulator fixtures or evaluates against simulator truth. To run the original fixture benchmark explicitly:
+
+```sh
+pnpm merge --traces-dir data/windstone-001 --truth data/windstone-001/truth.geojson --benchmark
+```
 
 ## Merge algorithm
 

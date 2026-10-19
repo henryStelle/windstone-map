@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
+    "test:production": "vitest run src/lib/production.test.ts --mode production",
     "test:browser": "playwright test",
     "preview": "vite preview"
   },

@@ -11,7 +11,7 @@ import {
   saveName,
 } from "./editing";
 import type { FeatureCollection, LineString } from "geojson";
-import { groupNamedTrails, landmarks, trails } from "./trails";
+import { groupNamedTrails, landmarks, type Trail } from "./trails";
 import {
   hasLocalMapEdits,
   LANDMARKS_KEY,
@@ -24,7 +24,18 @@ import { published } from "./published";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("editor files", () => {
-  const segments = trails.features.slice(0, 2);
+  const segments: Trail[] = [
+    {
+      type: "Feature",
+      properties: { id: "first", from: "start", to: "junction", support: 1, lengthMeters: 80 },
+      geometry: { type: "LineString", coordinates: [[-76.116, 45.057], [-76.115, 45.057]] },
+    },
+    {
+      type: "Feature",
+      properties: { id: "second", from: "junction", to: "end", support: 1, lengthMeters: 80 },
+      geometry: { type: "LineString", coordinates: [[-76.115, 45.057], [-76.114, 45.057]] },
+    },
+  ];
   const ids = segments.map((segment) => segment.properties.id);
 
   it("blocks disconnected sections for both new trails and updates without changing saved names", () => {

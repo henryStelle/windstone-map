@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createStore, delMany, set, values } from "idb-keyval";
 import type { FeatureCollection, LineString } from "geojson";
-import ingestedJson from "../../../../data/ingested.json?raw";
+import ingestedJson from "@map-data/ingested.json?raw";
+import { RECORDER_DATABASE } from "./storage";
 
-const store = createStore("windstone-recorder", "segments");
+const store = createStore(RECORDER_DATABASE, "segments");
 const acknowledgments = JSON.parse(ingestedJson) as {
   ingested: string[];
   rejected: string[];

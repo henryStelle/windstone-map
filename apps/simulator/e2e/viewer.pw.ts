@@ -12,13 +12,13 @@ async function publishedEdits() {
   return {
     names: JSON.parse(
       await readFile(
-        new URL("../../../data/trail-names.geojson", import.meta.url),
+        new URL("../../../data/recorded-002/output/trail-names.geojson", import.meta.url),
         "utf8",
       ),
     ),
     landmarks: JSON.parse(
       await readFile(
-        new URL("../../../data/landmarks.geojson", import.meta.url),
+        new URL("../../../data/recorded-002/output/landmarks.geojson", import.meta.url),
         "utf8",
       ),
     ),
@@ -189,12 +189,63 @@ async function landmarkRingPixels(
   );
 }
 
+async function trailSelectionPixels(
+  page: Page,
+  segment: NetworkSegment,
+  network: NetworkSegment[],
+) {
+  const points = await Promise.all(
+    segment.geometry.coordinates.map((coordinate) =>
+      networkScreenPoint(page, coordinate, network),
+    ),
+  );
+  const bounds = await page.locator(".viewer-map").boundingBox();
+  if (!bounds) throw new Error("Map is not visible");
+  const screenshot = await page.locator(".viewer-map").screenshot({
+    scale: "css",
+    style: ".viewer-selections { visibility: hidden; }",
+  });
+  return page.evaluate(async ({ source, points, bounds }) => {
+    const image = new Image();
+    image.src = source;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext("2d")!;
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const counts = [0, 0];
+    const colors = [[207, 90, 69], [37, 139, 224]];
+    for (let index = 1; index < points.length; index++) {
+      const start = points[index - 1];
+      const end = points[index];
+      const length = Math.hypot(end.x - start.x, end.y - start.y);
+      for (let step = 0; step < length; step++) {
+        const horizontal = Math.round(start.x + (end.x - start.x) * step / length - bounds.x);
+        const vertical = Math.round(start.y + (end.y - start.y) * step / length - bounds.y);
+        if (horizontal < 0 || vertical < 0 || horizontal >= canvas.width || vertical >= canvas.height) continue;
+        const offset = (vertical * canvas.width + horizontal) * 4;
+        colors.forEach((color, colorIndex) => {
+          if (color.every((value, channel) => Math.abs(pixels[offset + channel] - value) <= 10))
+            counts[colorIndex]++;
+        });
+      }
+    }
+    return counts;
+  }, {
+    source: `data:image/png;base64,${screenshot.toString("base64")}`,
+    points,
+    bounds,
+  });
+}
+
 test("viewer selections distinguish landmarks, unnamed segments and shared trails", async ({
   page,
 }, testInfo) => {
   const network = JSON.parse(
     await readFile(
-      new URL("../../../data/trails.geojson", import.meta.url),
+      new URL("../../../data/recorded-002/output/trails.geojson", import.meta.url),
       "utf8",
     ),
   ) as { features: NetworkSegment[] };
@@ -362,20 +413,30 @@ test("viewer selections distinguish landmarks, unnamed segments and shared trail
     ],
     network.features,
   );
-  await expect(selection).toContainText("Part of:");
-  await expect(selection.locator("strong")).toHaveCount(0);
+  await expect(selection).toHaveCount(2);
+  await expect(selection.locator("strong")).toHaveText(["Meadow Loop", "Shortcut"]);
+  await expect(page.getByText("Part of:", { exact: true })).toHaveCount(0);
   await expect(
     selection.getByText("Trail segment", { exact: true }),
   ).toHaveCount(0);
   await expect(selection.getByRole("link")).toHaveCount(2);
   await expect(selection.getByRole("combobox")).toHaveCount(0);
-  await expectSelectionAccent();
-  await expect(selection.locator(".viewer-selection-distance")).toHaveText(
-    `${Math.round(shared.properties.lengthMeters)} m`,
-  );
-  await expect(selection.locator(":scope > div > :last-child")).toHaveClass(
-    "viewer-selection-distance",
-  );
+  await expect(page.locator('.trail-row[aria-pressed="true"]')).toHaveCount(2);
+  const swatches = selection.locator(".selection-line");
+  await expect(swatches).toHaveCount(2);
+  await expect(swatches.nth(0)).toHaveCSS("background-color", "rgb(207, 90, 69)");
+  await expect(swatches.nth(1)).toHaveCSS("background-color", "rgb(37, 139, 224)");
+  const sharedPixels = await trailSelectionPixels(page, shared, network.features);
+  expect(sharedPixels[0]).toBeGreaterThan(5);
+  expect(sharedPixels[1]).toBeGreaterThan(5);
+  const continuationPixels = await trailSelectionPixels(page, continuation, network.features);
+  expect(continuationPixels[0]).toBeGreaterThan(5);
+  expect(continuationPixels[1]).toBe(0);
+  const distance = (meters: number) => meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
+  await expect(selection.locator(".viewer-selection-distance")).toHaveText([
+    distance(shared.properties.lengthMeters + continuation.properties.lengthMeters),
+    distance(shared.properties.lengthMeters),
+  ]);
   await page.screenshot({
     path: testInfo.outputPath("shared-segment.png"),
     animations: "disabled",
@@ -386,6 +447,9 @@ test("viewer selections distinguish landmarks, unnamed segments and shared trail
     "aria-pressed",
     "true",
   );
+  const singleTrailPixels = await trailSelectionPixels(page, shared, network.features);
+  expect(singleTrailPixels[0]).toBeGreaterThan(sharedPixels[0]);
+  expect(singleTrailPixels[1]).toBe(0);
   await page
     .getByRole("button", { name: "Fit trail network", exact: true })
     .click();
@@ -398,13 +462,73 @@ test("viewer selections distinguish landmarks, unnamed segments and shared trail
   await expect(selection).toHaveCount(0);
 });
 
+test("shared trail selections show separate full-length cards and colored overlaps", async ({ page }, testInfo) => {
+  const network = JSON.parse(await readFile(
+    new URL("../../../data/recorded-002/output/trails.geojson", import.meta.url),
+    "utf8",
+  )) as { features: NetworkSegment[] };
+  const [shared, continuation] = network.features;
+  await seedEditorStorage(page, {
+    names: {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { name: "Meadow Loop" },
+          geometry: { type: "MultiLineString", coordinates: [shared.geometry.coordinates, continuation.geometry.coordinates] },
+        },
+        {
+          type: "Feature",
+          properties: { name: "Shortcut" },
+          geometry: { type: "MultiLineString", coordinates: [shared.geometry.coordinates] },
+        },
+      ],
+    },
+    landmarks: { type: "FeatureCollection", features: [] },
+  });
+  await page.reload();
+  await clickNetworkCoordinate(page, shared.geometry.coordinates[Math.floor(shared.geometry.coordinates.length / 2)], network.features);
+  const cards = page.locator(".viewer-selection");
+  await expect(cards).toHaveCount(2);
+  await expect(cards.locator("strong")).toHaveText(["Meadow Loop", "Shortcut"]);
+  await expect(page.getByText("Part of:", { exact: true })).toHaveCount(0);
+  const distance = (meters: number) => meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
+  await expect(cards.locator(".viewer-selection-distance")).toHaveText([
+    distance(shared.properties.lengthMeters + continuation.properties.lengthMeters),
+    distance(shared.properties.lengthMeters),
+  ]);
+  await expect(cards.nth(0).locator(".selection-line")).toHaveCSS("background-color", "rgb(207, 90, 69)");
+  await expect(cards.nth(1).locator(".selection-line")).toHaveCSS("background-color", "rgb(37, 139, 224)");
+  const firstBounds = await cards.nth(0).boundingBox();
+  const secondBounds = await cards.nth(1).boundingBox();
+  expect(firstBounds!.y + firstBounds!.height).toBeLessThan(secondBounds!.y);
+  const sharedPixels = await trailSelectionPixels(page, shared, network.features);
+  expect(sharedPixels[0]).toBeGreaterThan(5);
+  expect(sharedPixels[1]).toBeGreaterThan(5);
+  const continuationPixels = await trailSelectionPixels(page, continuation, network.features);
+  expect(continuationPixels[0]).toBeGreaterThan(5);
+  expect(continuationPixels[1]).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath("shared-trail-cards.png"), animations: "disabled" });
+  await page.getByRole("button", { name: "Clear Meadow Loop selection", exact: true }).click();
+  await expect(cards).toHaveCount(1);
+  await expect(cards.locator("strong")).toHaveText("Shortcut");
+  await expect(page.locator('.trail-row[aria-pressed="true"]')).toHaveCount(1);
+  const remainingPixels = await trailSelectionPixels(page, shared, network.features);
+  expect(remainingPixels[0]).toBeGreaterThan(sharedPixels[0]);
+  expect(remainingPixels[1]).toBe(0);
+  await page.getByRole("button", { name: "Clear selection", exact: true }).click();
+  await expect(cards).toHaveCount(0);
+  const clearedPixels = await trailSelectionPixels(page, shared, network.features);
+  expect(clearedPixels).toEqual([0, 0]);
+});
+
 for (const kind of ["trails", "landmarks"] as const) {
   test(`selecting visible ${kind} preserves the camera and offscreen selections are fitted`, async ({
     page,
   }) => {
     const network = JSON.parse(
       await readFile(
-        new URL("../../../data/trails.geojson", import.meta.url),
+        new URL("../../../data/recorded-002/output/trails.geojson", import.meta.url),
         "utf8",
       ),
     ) as { features: NetworkSegment[] };
@@ -659,13 +783,13 @@ test("public map omits unnamed segments from the list", async ({
 }, testInfo) => {
   const names = JSON.parse(
     await readFile(
-      new URL("../../../data/trail-names.geojson", import.meta.url),
+      new URL("../../../data/recorded-002/output/trail-names.geojson", import.meta.url),
       "utf8",
     ),
   ) as { features: { properties: { name: string } }[] };
   const landmarks = JSON.parse(
     await readFile(
-      new URL("../../../data/landmarks.geojson", import.meta.url),
+      new URL("../../../data/recorded-002/output/landmarks.geojson", import.meta.url),
       "utf8",
     ),
   ) as { features: { properties: { name: string } }[] };
@@ -781,10 +905,63 @@ test("simulator is available only through its direct route", async ({
   await expect(edit).toHaveAttribute("aria-pressed", "false");
 });
 
+test("simulator loads datasets and retains walks while correcting truth", async ({ page }, testInfo) => {
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.goto("/simulator");
+  const map = page.getByRole("region", { name: "Trail simulator map" });
+  await expect(map).toHaveAttribute("aria-busy", "false");
+  const truthCount = page.locator(".truth-section .metric");
+  const walkCount = page.locator(".generator-section .metric");
+  const selector = page.getByLabel("Test dataset", { exact: true });
+  await selector.selectOption("windstone-001");
+  await page.getByRole("button", { name: "Load test dataset", exact: true }).click();
+  await expect(truthCount).toHaveText("105 edges");
+  await expect(walkCount).toHaveText("300 traces");
+
+  await selector.selectOption("recorded-002");
+  await page.getByRole("button", { name: "Load test dataset", exact: true }).click();
+  await expect(truthCount).toHaveText("4 edges");
+  await expect(walkCount).toHaveText("5 traces");
+  await expect(page.getByRole("button", { name: "Edit truth", exact: true }))
+    .toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Run merger", exact: true }).click();
+  await expect(page.locator(".merge-metrics")).toBeVisible();
+
+  await page.getByRole("button", { name: "Clear truth network", exact: true }).click();
+  await expect(truthCount).toHaveText("0 edges");
+  await expect(walkCount).toHaveText("5 traces");
+  await expect(page.locator(".merge-metrics")).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: "Walks", exact: true })).toBeChecked();
+  await map.screenshot({ path: testInfo.outputPath("walks-without-truth.png"), animations: "disabled" });
+
+  const canvas = map.locator("canvas");
+  const bounds = await canvas.boundingBox();
+  if (!bounds) throw new Error("Simulator map is not visible");
+  await canvas.click({ position: { x: bounds.width * 0.35, y: bounds.height * 0.4 } });
+  await canvas.click({ position: { x: bounds.width * 0.65, y: bounds.height * 0.6 } });
+  await expect(truthCount).toHaveText("1 edges");
+  await expect(walkCount).toHaveText("5 traces");
+  await page.getByRole("button", { name: "Undo last point", exact: true }).click();
+  await expect(truthCount).toHaveText("0 edges");
+  await expect(walkCount).toHaveText("5 traces");
+
+  await page.locator('.truth-section input[type="file"]').setInputFiles({
+    name: "truth.geojson",
+    mimeType: "application/geo+json",
+    buffer: await readFile(new URL("../../../data/recorded-002/truth.geojson", import.meta.url)),
+  });
+  await expect(truthCount).toHaveText("4 edges");
+  await expect(walkCount).toHaveText("5 traces");
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Truth", exact: true }).click();
+  expect((await downloadEvent).suggestedFilename()).toBe("truth.geojson");
+  await map.screenshot({ path: testInfo.outputPath("dataset-truth-and-walks.png"), animations: "disabled" });
+});
+
 test("installed map reloads with no network", async ({ page, context }) => {
   const names = JSON.parse(
     await readFile(
-      new URL("../../../data/trail-names.geojson", import.meta.url),
+      new URL("../../../data/recorded-002/output/trail-names.geojson", import.meta.url),
       "utf8",
     ),
   ) as { features: { properties: { name: string } }[] };
@@ -834,7 +1011,7 @@ test("one editor download includes names, landmarks and recorded walks", async (
 }, testInfo) => {
   const network = JSON.parse(
     await readFile(
-      new URL("../../../data/trails.geojson", import.meta.url),
+      new URL("../../../data/recorded-002/output/trails.geojson", import.meta.url),
       "utf8",
     ),
   ) as { features: NetworkSegment[] };
@@ -937,7 +1114,7 @@ test("received drafts and recordings are cleared and downloads are disabled", as
   const published = await publishedEdits();
   const acknowledgments = JSON.parse(
     await readFile(
-      new URL("../../../data/ingested.json", import.meta.url),
+      new URL("../../../data/recorded-002/output/ingested.json", import.meta.url),
       "utf8",
     ),
   ) as { ingested: string[] };
@@ -1122,7 +1299,7 @@ test("trail changes require an explicit save and disconnected sections cannot be
   );
   const network = JSON.parse(
     await readFile(
-      new URL("../../../data/trails.geojson", import.meta.url),
+      new URL("../../../data/recorded-002/output/trails.geojson", import.meta.url),
       "utf8",
     ),
   ) as { features: NetworkSegment[] };
@@ -1224,7 +1401,7 @@ test("naming controls omit select-all and reset only after successful saves", as
 }, testInfo) => {
   const network = JSON.parse(
     await readFile(
-      new URL("../../../data/trails.geojson", import.meta.url),
+      new URL("../../../data/recorded-002/output/trails.geojson", import.meta.url),
       "utf8",
     ),
   );

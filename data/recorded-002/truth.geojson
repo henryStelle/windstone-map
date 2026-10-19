@@ -1,0 +1,93 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "f8e5eddb-a6e2-4310-a997-3167e7b04829",
+      "properties": {
+        "id": "f8e5eddb-a6e2-4310-a997-3167e7b04829",
+        "from": "bb2859ea-c9a9-4a78-810f-1c499c97422c",
+        "to": "4a073ce5-c6d2-40a5-8476-2cb26dfc6c76"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -123.4522113949883,
+            48.57515909398933
+          ],
+          [
+            -123.44939514556228,
+            48.575148133194546
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "8423b14a-d1cc-4161-a1e8-2f5177aadf82",
+      "properties": {
+        "id": "8423b14a-d1cc-4161-a1e8-2f5177aadf82",
+        "from": "4a073ce5-c6d2-40a5-8476-2cb26dfc6c76",
+        "to": "8fabf102-b473-43f8-9d01-968351ec67db"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -123.44939514556228,
+            48.575148133194546
+          ],
+          [
+            -123.44832633115595,
+            48.575070135461914
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "2fb7c10c-e8ad-49ce-90eb-bd661f554b47",
+      "properties": {
+        "id": "2fb7c10c-e8ad-49ce-90eb-bd661f554b47",
+        "from": "8fabf102-b473-43f8-9d01-968351ec67db",
+        "to": "c8a259e8-b3f9-4044-8c44-dc4ad6f483ad"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -123.44832633115595,
+            48.575070135461914
+          ],
+          [
+            -123.44777550590047,
+            48.57467828489095
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "25f3fe5e-ce0b-44cf-a2e2-a6e6750e6693",
+      "properties": {
+        "id": "25f3fe5e-ce0b-44cf-a2e2-a6e6750e6693",
+        "from": "c8a259e8-b3f9-4044-8c44-dc4ad6f483ad",
+        "to": "4dad7030-8bbb-4b06-9370-109125cb45e4"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -123.44777550590047,
+            48.57467828489095
+          ],
+          [
+            -123.44598221766296,
+            48.57517974346948
+          ]
+        ]
+      }
+    }
+  ]
+}

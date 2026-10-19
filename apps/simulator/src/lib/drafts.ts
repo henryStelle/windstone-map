@@ -9,9 +9,10 @@ import {
 } from "./editing";
 import { landmarks, trails, type Trail } from "./trails";
 import { published } from "./published";
+import { EDITOR_STORAGE_PREFIX } from "./storage";
 
-export const NAMES_KEY = "windstone-editor-names-v1";
-export const LANDMARKS_KEY = "windstone-editor-landmarks-v1";
+export const NAMES_KEY = `${EDITOR_STORAGE_PREFIX}-names-v1`;
+export const LANDMARKS_KEY = `${EDITOR_STORAGE_PREFIX}-landmarks-v1`;
 const DRAFT_EVENT = "windstone-edits-changed";
 
 export function hasLocalMapEdits(
