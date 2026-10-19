@@ -138,7 +138,10 @@ describe("edit ingestion and trace merge CLIs", () => {
     const merged = merge("--out-dir", data);
     expect(merged.status, merged.stderr).toBe(0);
     expect((await saved("trails.geojson")).features).toHaveLength(1);
-    expect(await saved("ingested.json")).toEqual({ ingested: ["walk-1"], rejected: [] });
+    expect(await saved("ingested.json")).toEqual({
+      ingested: ["walk-1"],
+      rejected: [],
+    });
     expect((await saved("merge-report.json")).inputs).toHaveLength(1);
     expect(await readdir(traces)).toHaveLength(1);
     expect(JSON.parse(await readFile(input, "utf8"))).toEqual(bundle);
@@ -148,14 +151,27 @@ describe("edit ingestion and trace merge CLIs", () => {
   });
 
   it("refuses to publish development fixtures to production by default", () => {
-    const walk = fileURLToPath(new URL("../../../data/recorded-002/walks.geojson", import.meta.url));
-    const result = spawnSync(process.execPath, [mergeScript, "--input", walk], { encoding: "utf8" });
+    const walk = fileURLToPath(
+      new URL("../../../data/recorded-002/walks.geojson", import.meta.url),
+    );
+    const result = spawnSync(process.execPath, [mergeScript, "--input", walk], {
+      encoding: "utf8",
+    });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Development fixtures cannot be published");
-    const bundle = fileURLToPath(new URL("../../../data/recorded-002/source/windstone-edits-2026-10-19T01-12-10-347Z.json", import.meta.url));
-    const ingestion = spawnSync(process.execPath, [script, bundle], { encoding: "utf8" });
+    const bundle = fileURLToPath(
+      new URL(
+        "../../../data/recorded-002/source/windstone-edits-2026-10-19T01-12-10-347Z.json",
+        import.meta.url,
+      ),
+    );
+    const ingestion = spawnSync(process.execPath, [script, bundle], {
+      encoding: "utf8",
+    });
     expect(ingestion.status).toBe(1);
-    expect(ingestion.stderr).toContain("Development fixtures cannot be ingested");
+    expect(ingestion.stderr).toContain(
+      "Development fixtures cannot be ingested",
+    );
   });
 
   it("discovers edit bundles without explicit input files", async () => {
@@ -310,30 +326,58 @@ describe("edit ingestion and trace merge CLIs", () => {
     expect(report.inputs[0]).toMatch(/walks\.geojson$/);
   });
 
-  it.each(["missing", "empty"])("resets every published data file when the source directory is %s", async (source) => {
-    const output = join(directory, "merged");
-    if (source === "empty") await mkdir(join(directory, "traces"));
-    await mkdir(output);
-    for (const name of ["trails.geojson", "trail-names.geojson", "landmarks.geojson", "ingested.json", "merge-report.json"])
-      await writeFile(join(output, name), "stale production data");
-    const result = merge();
-    expect(result.status, result.stderr).toBe(0);
-    for (const name of ["trails.geojson", "trail-names.geojson", "landmarks.geojson"])
-      expect(JSON.parse(await readFile(join(output, name), "utf8"))).toEqual(empty);
-    expect(JSON.parse(await readFile(join(output, "ingested.json"), "utf8")))
-      .toEqual({ ingested: [], rejected: [] });
-    expect(JSON.parse(await readFile(join(output, "merge-report.json"), "utf8")))
-      .toMatchObject({ inputs: [], stats: { cleanedRuns: 0, nodes: 0, junctions: 0 }, score: null });
-  });
+  it.each(["missing", "empty"])(
+    "resets every published data file when the source directory is %s",
+    async (source) => {
+      const output = join(directory, "merged");
+      if (source === "empty") await mkdir(join(directory, "traces"));
+      await mkdir(output);
+      for (const name of [
+        "trails.geojson",
+        "trail-names.geojson",
+        "landmarks.geojson",
+        "ingested.json",
+        "merge-report.json",
+      ])
+        await writeFile(join(output, name), "stale production data");
+      const result = merge();
+      expect(result.status, result.stderr).toBe(0);
+      for (const name of [
+        "trails.geojson",
+        "trail-names.geojson",
+        "landmarks.geojson",
+      ])
+        expect(JSON.parse(await readFile(join(output, name), "utf8"))).toEqual(
+          empty,
+        );
+      expect(
+        JSON.parse(await readFile(join(output, "ingested.json"), "utf8")),
+      ).toEqual({ ingested: [], rejected: [] });
+      expect(
+        JSON.parse(await readFile(join(output, "merge-report.json"), "utf8")),
+      ).toMatchObject({
+        inputs: [],
+        stats: { cleanedRuns: 0, nodes: 0, junctions: 0 },
+        score: null,
+      });
+    },
+  );
 
   it("creates all empty published files when neither sources nor output exist", async () => {
     const result = merge();
     expect(result.status, result.stderr).toBe(0);
     expect((await readdir(join(directory, "merged"))).sort()).toEqual([
-      "ingested.json", "landmarks.geojson", "merge-report.json", "trail-names.geojson", "trails.geojson",
+      "ingested.json",
+      "landmarks.geojson",
+      "merge-report.json",
+      "trail-names.geojson",
+      "trails.geojson",
     ]);
-    expect(JSON.parse(await readFile(join(directory, "merged", "trails.geojson"), "utf8")))
-      .toEqual(empty);
+    expect(
+      JSON.parse(
+        await readFile(join(directory, "merged", "trails.geojson"), "utf8"),
+      ),
+    ).toEqual(empty);
   });
 
   it("does not clear existing output when source files are invalid", async () => {
@@ -344,7 +388,9 @@ describe("edit ingestion and trace merge CLIs", () => {
     await writeFile(join(traces, "broken.geojson"), "not JSON");
     const result = merge();
     expect(result.status).toBe(1);
-    expect(await readFile(join(output, "trails.geojson"), "utf8")).toBe("existing map");
+    expect(await readFile(join(output, "trails.geojson"), "utf8")).toBe(
+      "existing map",
+    );
     expect(await readdir(output)).toEqual(["trails.geojson"]);
   });
 

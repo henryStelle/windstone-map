@@ -80,7 +80,10 @@ async function prepareEdits(input: string, dataDir: string, tracesDir: string) {
   const names = collection(edits.trailNames, "trail names");
   const landmarks = collection(edits.landmarks, "landmarks");
   const walks = collection(edits.walks, "walks");
-  const network: FeatureCollection = await readFile(resolve(dataDir, "trails.geojson"), "utf8")
+  const network: FeatureCollection = await readFile(
+    resolve(dataDir, "trails.geojson"),
+    "utf8",
+  )
     .then((content) => collection(JSON.parse(content), "trail network"))
     .catch((error: unknown) => {
       if (error instanceof Error && "code" in error && error.code === "ENOENT")
@@ -223,13 +226,24 @@ async function ingest() {
     return;
   }
   const production = resolve(root, "production");
-  const inputDir = resolve(values["input-dir"] ?? resolve(root, "recordings/exports"));
+  const inputDir = resolve(
+    values["input-dir"] ?? resolve(root, "recordings/exports"),
+  );
   const inputs = positionals.length
     ? positionals.map((path) => resolve(path))
-    : (await readdir(inputDir, { withFileTypes: true }).catch((error: unknown) => {
-        if (error instanceof Error && "code" in error && error.code === "ENOENT") return [];
-        throw error;
-      }))
+    : (
+        await readdir(inputDir, { withFileTypes: true }).catch(
+          (error: unknown) => {
+            if (
+              error instanceof Error &&
+              "code" in error &&
+              error.code === "ENOENT"
+            )
+              return [];
+            throw error;
+          },
+        )
+      )
         .filter(
           (entry) =>
             entry.isFile() && /^windstone-edits.*\.json$/i.test(entry.name),
@@ -241,12 +255,16 @@ async function ingest() {
       `No Windstone edit bundles found in ${inputDir}. Add windstone-edits*.json files or provide explicit file paths. No edits were saved.`,
     );
   const dataDir = resolve(values["data-dir"] ?? production);
-  const tracesDir = resolve(values["traces-dir"] ?? resolve(root, "recordings/raw"));
+  const tracesDir = resolve(
+    values["traces-dir"] ?? resolve(root, "recordings/raw"),
+  );
   if (
     inputs.some((path) => path.startsWith(`${resolve(root, "data")}${sep}`)) &&
     (dataDir === production || tracesDir === resolve(root, "recordings/raw"))
   )
-    throw new Error("Development fixtures cannot be ingested into production. Use separate --data-dir and --traces-dir.");
+    throw new Error(
+      "Development fixtures cannot be ingested into production. Use separate --data-dir and --traces-dir.",
+    );
   const batches = await Promise.all(
     inputs.map((input) => prepareEdits(input, dataDir, tracesDir)),
   );

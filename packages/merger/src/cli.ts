@@ -76,9 +76,13 @@ async function merge() {
       : production;
   if (
     output === production &&
-    [...inputPaths, truthPath].some((path) => path?.startsWith(`${resolve(root, "data")}${sep}`))
+    [...inputPaths, truthPath].some((path) =>
+      path?.startsWith(`${resolve(root, "data")}${sep}`),
+    )
   )
-    throw new Error("Development fixtures cannot be published to production. Use a separate --out-dir.");
+    throw new Error(
+      "Development fixtures cannot be published to production. Use a separate --out-dir.",
+    );
   console.log(
     `Reading ${inputPaths.length} trace ${inputPaths.length === 1 ? "file" : "files"}:`,
   );
@@ -102,7 +106,10 @@ async function merge() {
     "merge-report.json": report,
   };
   if (inputPaths.length === 0) {
-    const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
+    const empty: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [],
+    };
     files["trail-names.geojson"] = empty;
     files["landmarks.geojson"] = empty;
   }

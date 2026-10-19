@@ -27,13 +27,37 @@ describe("editor files", () => {
   const segments: Trail[] = [
     {
       type: "Feature",
-      properties: { id: "first", from: "start", to: "junction", support: 1, lengthMeters: 80 },
-      geometry: { type: "LineString", coordinates: [[-76.116, 45.057], [-76.115, 45.057]] },
+      properties: {
+        id: "first",
+        from: "start",
+        to: "junction",
+        support: 1,
+        lengthMeters: 80,
+      },
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [-76.116, 45.057],
+          [-76.115, 45.057],
+        ],
+      },
     },
     {
       type: "Feature",
-      properties: { id: "second", from: "junction", to: "end", support: 1, lengthMeters: 80 },
-      geometry: { type: "LineString", coordinates: [[-76.115, 45.057], [-76.114, 45.057]] },
+      properties: {
+        id: "second",
+        from: "junction",
+        to: "end",
+        support: 1,
+        lengthMeters: 80,
+      },
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [-76.115, 45.057],
+          [-76.114, 45.057],
+        ],
+      },
     },
   ];
   const ids = segments.map((segment) => segment.properties.id);
