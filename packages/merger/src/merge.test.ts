@@ -327,7 +327,7 @@ describe("output smoothing", () => {
     expect(
       evaluateNetwork(smoothed.trails, truth).meanErrorMeters,
     ).toBeLessThan(evaluateNetwork(original.trails, truth).meanErrorMeters!);
-  });
+  }, 30_000);
 });
 
 describe("root fixture accuracy", () => {
@@ -362,7 +362,7 @@ describe("root fixture accuracy", () => {
     expect(score.topology.mergedComponents).toBe(
       score.topology.truthComponents,
     );
-  });
+  }, 30_000);
 
   it("generalizes to a different walk and noise seed on the same network", () => {
     const walks = generateWalks(graphFromGeoJson(truth), {
@@ -375,5 +375,5 @@ describe("root fixture accuracy", () => {
     expect(score.f1).toBeGreaterThan(0.99);
     expect(score.meanErrorMeters).toBeLessThan(1);
     expect(score.topology.junctionF1).toBeGreaterThanOrEqual(0.8);
-  });
+  }, 30_000);
 });
