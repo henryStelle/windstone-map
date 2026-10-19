@@ -5,12 +5,14 @@ A simple, offline-capable map of the trails at the non-profit, with a few landma
 ## Goals and non-goals
 
 **Goals**
+
 - View the trails and a few landmarks on a minimal map, offline.
 - Record a walk in the PWA (screen on) with no extra app required.
 - Merge many noisy, partially overlapping traces into a clean trail graph, automatically detecting junctions.
 - Keep raw traces and the merged map in git.
 
 **Non-goals (v0)**
+
 - Directions or routing.
 - Background recording (browsers can't do this; see Recorder limits).
 - Any server, database, or Cloudflare account.
@@ -42,6 +44,7 @@ The PR reviews the merged map diff. That is the quality gate.
 **Limits.** Browsers suspend geolocation when the screen locks or the page is hidden, and iOS has no background location for web apps. The recorder is foreground-only by design. Trails are short and edits are rare, so this is acceptable.
 
 **Behavior**
+
 - Request a Wake Lock on start; re-request on `visibilitychange` (it is released when the page is hidden).
 - `watchPosition` with `enableHighAccuracy: true`. Write every fix to IndexedDB immediately: time, lat, lon, accuracy, heading (if present).
 - End the current segment and start a new one if the page is hidden, the tab is suspended, or there is a gap of more than ~10 s between fixes. The merge must never draw a line across a gap.
@@ -54,14 +57,15 @@ The PR reviews the merged map diff. That is the quality gate.
 Many walks may be recorded over many days before a single export. Each segment is tracked individually.
 
 1. **Recording:** a segment gets a random ID (`crypto.randomUUID()`) when it starts. Every fix is written to IndexedDB as it arrives.
-2. **Saved:** the segment is closed and waits locally. State: *on this device*.
-3. **Exported:** included in a download or share. This only sets a flag. Nothing is deleted. State: *exported*.
-4. **Ingested:** the merge Action records the segment's ID in `data/ingested.json`. The PWA fetches this file on load. State: *received*.
+2. **Saved:** the segment is closed and waits locally. State: _on this device_.
+3. **Exported:** included in a download or share. This only sets a flag. Nothing is deleted. State: _exported_.
+4. **Ingested:** the merge Action records the segment's ID in `data/ingested.json`. The PWA fetches this file on load. State: _received_.
 5. **Deleted:** only segments listed as ingested (or rejected) are removed from IndexedDB.
 
 With no server in v0, the published site is the acknowledgment.
 
 **Behavior to design for**
+
 - **Long delay:** ingestion appears only after commit, PR merge, and Pages deploy, possibly days later. The "My walks" list shows each segment's state.
 - **Manual override:** a "Delete anyway" option with a clear warning.
 - **Offline:** if `ingested.json` can't be fetched, keep everything and check again next time.
@@ -105,6 +109,7 @@ Ingestion does not regenerate trail geometry or mark walks as merged. When walks
 Runs offline in Python or Node and from the Action. It rebuilds the whole map from all raw traces on every run. This avoids order dependence, and the algorithm can be improved later without migrating data. Trails are short, so performance isn't a concern.
 
 **Pipeline**
+
 1. **Clean:** dedupe by segment ID, drop low-accuracy fixes, drop segments that are too short, smooth lightly.
 2. **Match/cluster (heading-aware):** merge stretches that agree in both position (within a tolerance scaled by accuracy / local jitter) and direction. Heading awareness stops crossing paths from being fused.
 3. **Junction detection:** a junction is where traces run together then diverge and stay apart for a minimum distance. Require minimum support (at least k traces on each branch) so a single wanderer doesn't create a fork.

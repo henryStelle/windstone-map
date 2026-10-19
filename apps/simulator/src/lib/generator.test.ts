@@ -51,15 +51,43 @@ describe("generateWalks", () => {
 });
 
 describe("walk imports", () => {
-  const walks = generateWalks(graph, { count: 2, noiseMeters: 4, sampleSpacingMeters: 8, seed: "import" });
+  const walks = generateWalks(graph, {
+    count: 2,
+    noiseMeters: 4,
+    sampleSpacingMeters: 8,
+    seed: "import",
+  });
 
   it("preserves saved traces and metadata", () => {
     expect(walksFromGeoJson(walks)).toEqual(walks);
   });
 
   it("rejects malformed collections and missing segment IDs", () => {
-    expect(() => walksFromGeoJson({ ...walks, type: "Feature" } as never)).toThrow("FeatureCollection");
-    expect(() => walksFromGeoJson({ ...walks, features: [{ ...walks.features[0], id: undefined, properties: {} }] })).toThrow("segment ID");
-    expect(() => walksFromGeoJson({ ...walks, features: [{ ...walks.features[0], geometry: { type: "LineString", coordinates: [[NaN, 45], [-76, 45]] } }] })).toThrow("valid GPS");
+    expect(() =>
+      walksFromGeoJson({ ...walks, type: "Feature" } as never),
+    ).toThrow("FeatureCollection");
+    expect(() =>
+      walksFromGeoJson({
+        ...walks,
+        features: [{ ...walks.features[0], id: undefined, properties: {} }],
+      }),
+    ).toThrow("segment ID");
+    expect(() =>
+      walksFromGeoJson({
+        ...walks,
+        features: [
+          {
+            ...walks.features[0],
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [NaN, 45],
+                [-76, 45],
+              ],
+            },
+          },
+        ],
+      }),
+    ).toThrow("valid GPS");
   });
 });

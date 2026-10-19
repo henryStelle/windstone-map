@@ -193,8 +193,11 @@ export function mergeTraces(
   trails.features = edges.map((edge, index) => {
     const id = `edge-${String(index + 1).padStart(5, "0")}`;
     const points = simplify(
-      smoothCenterline(edge.points, options.outputSmoothingMeters, options.cellSizeMeters)
-        .map(([x, y]) => ({ x, y })),
+      smoothCenterline(
+        edge.points,
+        options.outputSmoothingMeters,
+        options.cellSizeMeters,
+      ).map(([x, y]) => ({ x, y })),
       options.simplifyMeters,
       true,
     ).map(({ x, y }): Point => [x, y]);
@@ -261,11 +264,17 @@ function smooth(points: Point[], radius: number): Point[] {
   });
 }
 
-function smoothCenterline(points: Point[], sigmaMeters: number, sampleSpacingMeters: number): Point[] {
+function smoothCenterline(
+  points: Point[],
+  sigmaMeters: number,
+  sampleSpacingMeters: number,
+): Point[] {
   if (sigmaMeters === 0 || points.length < 3) return points;
   const stations = [0];
   for (let index = 1; index < points.length; index += 1) {
-    stations.push(stations[index - 1] + distance(points[index - 1], points[index]));
+    stations.push(
+      stations[index - 1] + distance(points[index - 1], points[index]),
+    );
   }
   const length = stations.at(-1)!;
   if (length === 0) return points;
@@ -275,21 +284,33 @@ function smoothCenterline(points: Point[], sigmaMeters: number, sampleSpacingMet
   let segment = 1;
   for (let index = 1; index < steps; index += 1) {
     const station = index * spacing;
-    while (segment < points.length - 1 && stations[segment] <= station) segment += 1;
-    const fraction = (station - stations[segment - 1]) / (stations[segment] - stations[segment - 1]);
+    while (segment < points.length - 1 && stations[segment] <= station)
+      segment += 1;
+    const fraction =
+      (station - stations[segment - 1]) /
+      (stations[segment] - stations[segment - 1]);
     const first = points[segment - 1];
     const second = points[segment];
-    samples.push([first[0] + fraction * (second[0] - first[0]), first[1] + fraction * (second[1] - first[1])]);
+    samples.push([
+      first[0] + fraction * (second[0] - first[0]),
+      first[1] + fraction * (second[1] - first[1]),
+    ]);
   }
   samples.push(points.at(-1)!);
-  const radius = Math.min(steps, Math.ceil(3 * sigmaMeters / spacing));
+  const radius = Math.min(steps, Math.ceil((3 * sigmaMeters) / spacing));
   return samples.map((point, index) => {
     if (index === 0 || index === samples.length - 1) return point;
     let total = 0;
     let sumX = 0;
     let sumY = 0;
-    for (let neighbor = Math.max(0, index - radius); neighbor <= Math.min(steps, index + radius); neighbor += 1) {
-      const weight = Math.exp(-0.5 * ((neighbor - index) * spacing / sigmaMeters) ** 2);
+    for (
+      let neighbor = Math.max(0, index - radius);
+      neighbor <= Math.min(steps, index + radius);
+      neighbor += 1
+    ) {
+      const weight = Math.exp(
+        -0.5 * (((neighbor - index) * spacing) / sigmaMeters) ** 2,
+      );
       total += weight;
       sumX += samples[neighbor][0] * weight;
       sumY += samples[neighbor][1] * weight;

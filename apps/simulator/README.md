@@ -29,4 +29,12 @@ If you are developing a production application, we recommend enabling type-aware
 }
 ```
 
+## GitHub Pages
+
+The [Pages workflow](../../.github/workflows/pages.yml) tests and builds pull requests, then deploys pushes to `main`. It can also be run manually on `main` from the Actions tab.
+
+In the repository's **Settings > Pages**, set **Source** to **GitHub Actions**. Commit and push the workflow to publish at <https://henrystelle.github.io/windstone-map/>.
+
+The build uses the repository name as its base path. A generated `404.html` lets direct `/windstone-map/editor` and `/windstone-map/simulator` links load the application on Pages. No custom domain or deployment secret is required.
+
 See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.

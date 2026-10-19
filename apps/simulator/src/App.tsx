@@ -22,7 +22,11 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./Simulator.css";
 import { generateWalks } from "./lib/generator";
 import { walksFromGeoJson } from "./lib/walks";
-import type { MergeRequest, MergeResponse, MergeSuccess } from "./lib/merge.worker";
+import type {
+  MergeRequest,
+  MergeResponse,
+  MergeSuccess,
+} from "./lib/merge.worker";
 import truthFixtureUrl from "../../../truth.geojson?url";
 import walksFixtureUrl from "../../../walks-windstone-001.geojson?url";
 import {
@@ -42,7 +46,10 @@ const DEFAULT_VIEW: { center: Coordinate; zoom: number } = {
   zoom: 18,
 };
 const SNAP_DISTANCE_PX = 16;
-const EMPTY_WALKS: FeatureCollection<LineString> = { type: "FeatureCollection", features: [] };
+const EMPTY_WALKS: FeatureCollection<LineString> = {
+  type: "FeatureCollection",
+  features: [],
+};
 
 function App() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -56,13 +63,18 @@ function App() {
   const editingTruthRef = useRef(true);
   const [graph, setGraph] = useState(graphRef.current);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
-  const [walks, setWalks] = useState<FeatureCollection<LineString>>(EMPTY_WALKS);
+  const [walks, setWalks] =
+    useState<FeatureCollection<LineString>>(EMPTY_WALKS);
   const [editingTruth, setEditingTruth] = useState(true);
   const [mergeResult, setMergeResult] = useState<MergeSuccess | null>(null);
   const [isMerging, setIsMerging] = useState(false);
   const [isLoadingFixtures, setIsLoadingFixtures] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [visibility, setVisibility] = useState({ truth: true, walks: true, merged: true });
+  const [visibility, setVisibility] = useState({
+    truth: true,
+    walks: true,
+    merged: true,
+  });
   const [walkView, setWalkView] = useState<"all" | "single">("all");
   const [selectedWalkIndex, setSelectedWalkIndex] = useState(0);
   const [walkCount, setWalkCount] = useState(300);
@@ -173,12 +185,40 @@ function App() {
       "simulated-walks",
       walkView === "single" ? "truth-nodes" : "truth-edges",
     );
-    (map.getSource("merged-trails") as GeoJSONSource).setData(mergeResult?.result.trails ?? EMPTY_WALKS);
-    map.setLayoutProperty("truth-edges", "visibility", visibility.truth ? "visible" : "none");
-    map.setLayoutProperty("truth-nodes", "visibility", visibility.truth && editingTruth ? "visible" : "none");
-    map.setLayoutProperty("simulated-walks", "visibility", visibility.walks ? "visible" : "none");
-    map.setLayoutProperty("merged-trails", "visibility", visibility.merged ? "visible" : "none");
-  }, [activeNodeId, editingTruth, graph, mapReady, mergeResult, selectedWalkIndex, visibility, walks, walkView]);
+    (map.getSource("merged-trails") as GeoJSONSource).setData(
+      mergeResult?.result.trails ?? EMPTY_WALKS,
+    );
+    map.setLayoutProperty(
+      "truth-edges",
+      "visibility",
+      visibility.truth ? "visible" : "none",
+    );
+    map.setLayoutProperty(
+      "truth-nodes",
+      "visibility",
+      visibility.truth && editingTruth ? "visible" : "none",
+    );
+    map.setLayoutProperty(
+      "simulated-walks",
+      "visibility",
+      visibility.walks ? "visible" : "none",
+    );
+    map.setLayoutProperty(
+      "merged-trails",
+      "visibility",
+      visibility.merged ? "visible" : "none",
+    );
+  }, [
+    activeNodeId,
+    editingTruth,
+    graph,
+    mapReady,
+    mergeResult,
+    selectedWalkIndex,
+    visibility,
+    walks,
+    walkView,
+  ]);
 
   function resetMerge() {
     mergeWorkerRef.current?.terminate();
@@ -207,7 +247,10 @@ function App() {
     setTruthEditing(false);
     setIsMerging(true);
     try {
-      const worker = new Worker(new URL("./lib/merge.worker.ts", import.meta.url), { type: "module" });
+      const worker = new Worker(
+        new URL("./lib/merge.worker.ts", import.meta.url),
+        { type: "module" },
+      );
       mergeWorkerRef.current = worker;
       worker.onmessage = (event: MessageEvent<MergeResponse>) => {
         if (mergeWorkerRef.current !== worker) return;
@@ -230,7 +273,11 @@ function App() {
       worker.postMessage(request);
     } catch (failure) {
       resetMerge();
-      setError(failure instanceof Error ? failure.message : "Unable to start the merger.");
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "Unable to start the merger.",
+      );
     }
   }
 
@@ -324,35 +371,57 @@ function App() {
       replaceWalks(walksFromGeoJson(JSON.parse(await file.text())));
       setTruthEditing(false);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Invalid walks GeoJSON.");
+      setError(
+        failure instanceof Error ? failure.message : "Invalid walks GeoJSON.",
+      );
     } finally {
       event.target.value = "";
     }
   }
 
   async function loadProjectFixtures() {
-    if ((graph.nodes.length > 0 || walks.features.length > 0) && !window.confirm("Replace the current truth and walks with the project fixtures?")) return;
+    if (
+      (graph.nodes.length > 0 || walks.features.length > 0) &&
+      !window.confirm(
+        "Replace the current truth and walks with the project fixtures?",
+      )
+    )
+      return;
     setIsLoadingFixtures(true);
     setError(null);
     setTruthEditing(false);
     try {
-      const [truth, savedWalks] = await Promise.all([truthFixtureUrl, walksFixtureUrl].map(async (url) => {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Unable to load project fixtures (${response.status}).`);
-        return response.json();
-      }));
+      const [truth, savedWalks] = await Promise.all(
+        [truthFixtureUrl, walksFixtureUrl].map(async (url) => {
+          const response = await fetch(url);
+          if (!response.ok)
+            throw new Error(
+              `Unable to load project fixtures (${response.status}).`,
+            );
+          return response.json();
+        }),
+      );
       const imported = graphFromGeoJson(truth);
       const importedWalks = walksFromGeoJson(savedWalks);
-      if (imported.edges.length === 0) throw new Error("The project truth fixture has no trail edges.");
+      if (imported.edges.length === 0)
+        throw new Error("The project truth fixture has no trail edges.");
       historyRef.current.push(graph);
       setGraph(imported);
       replaceWalks(importedWalks);
       setVisibility({ truth: true, walks: true, merged: true });
       const bounds = new maplibregl.LngLatBounds();
       for (const node of imported.nodes) bounds.extend(node.coordinate);
-      mapRef.current?.fitBounds(bounds, { padding: 48, maxZoom: 18, duration: 600 });
+      mapRef.current?.fitBounds(bounds, {
+        padding: 48,
+        maxZoom: 18,
+        duration: 600,
+      });
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Unable to load project fixtures.");
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "Unable to load project fixtures.",
+      );
     } finally {
       setIsLoadingFixtures(false);
     }
@@ -438,8 +507,16 @@ function App() {
               onChange={importTruth}
             />
           </div>
-          <button className="secondary-button fixture-button" type="button" onClick={loadProjectFixtures} disabled={isLoadingFixtures}>
-            <FolderOpen size={16} /> {isLoadingFixtures ? "Loading fixtures..." : "Load project fixtures"}
+          <button
+            className="secondary-button fixture-button"
+            type="button"
+            onClick={loadProjectFixtures}
+            disabled={isLoadingFixtures}
+          >
+            <FolderOpen size={16} />{" "}
+            {isLoadingFixtures
+              ? "Loading fixtures..."
+              : "Load project fixtures"}
           </button>
         </section>
 
@@ -492,10 +569,21 @@ function App() {
           >
             <Play size={17} fill="currentColor" /> Generate walks
           </button>
-          <button className="secondary-button fixture-button" type="button" onClick={() => walksInputRef.current?.click()} disabled={isLoadingFixtures}>
+          <button
+            className="secondary-button fixture-button"
+            type="button"
+            onClick={() => walksInputRef.current?.click()}
+            disabled={isLoadingFixtures}
+          >
             <FileUp size={16} /> Import walks
           </button>
-          <input ref={walksInputRef} type="file" accept=".geojson,application/geo+json,application/json" hidden onChange={importWalks} />
+          <input
+            ref={walksInputRef}
+            type="file"
+            accept=".geojson,application/geo+json,application/json"
+            hidden
+            onChange={importWalks}
+          />
           <fieldset
             className="walk-view"
             disabled={walks.features.length === 0}
@@ -578,25 +666,81 @@ function App() {
 
         <section className="merge-section" aria-busy={isMerging}>
           <div className="section-heading compact">
-            <div><span className="step-number">03</span><h2>Merge comparison</h2></div>
-            <span className="metric">{mergeResult ? `${mergeResult.result.trails.features.length} edges` : isMerging ? "Running" : "Not run"}</span>
+            <div>
+              <span className="step-number">03</span>
+              <h2>Merge comparison</h2>
+            </div>
+            <span className="metric">
+              {mergeResult
+                ? `${mergeResult.result.trails.features.length} edges`
+                : isMerging
+                  ? "Running"
+                  : "Not run"}
+            </span>
           </div>
-          <button className="primary-button merge-button" type="button" onClick={runMerge} disabled={!canGenerate || walks.features.length === 0 || isMerging || isLoadingFixtures}>
+          <button
+            className="primary-button merge-button"
+            type="button"
+            onClick={runMerge}
+            disabled={
+              !canGenerate ||
+              walks.features.length === 0 ||
+              isMerging ||
+              isLoadingFixtures
+            }
+          >
             <GitFork size={17} /> {isMerging ? "Merging..." : "Run merger"}
           </button>
-          {error && <p className="error-message" role="alert">{error}</p>}
+          {error && (
+            <p className="error-message" role="alert">
+              {error}
+            </p>
+          )}
           <div aria-live="polite">
-            {mergeResult && <>
-              <dl className="merge-metrics">
-                <div><dt>Mean error</dt><dd>{mergeResult.score.meanErrorMeters === null ? "N/A" : `${mergeResult.score.meanErrorMeters.toFixed(2)} m`}</dd></div>
-                <div><dt>P95 error</dt><dd>{mergeResult.score.p95ErrorMeters === null ? "N/A" : `${mergeResult.score.p95ErrorMeters.toFixed(2)} m`}</dd></div>
-                <div><dt>Coverage (5 m)</dt><dd>{(mergeResult.score.recall * 100).toFixed(1)}%</dd></div>
-                <div><dt>Precision (5 m)</dt><dd>{(mergeResult.score.precision * 100).toFixed(1)}%</dd></div>
-              </dl>
-              <p className="merge-summary">Junctions (10 m): {mergeResult.score.topology.matchedJunctions}/{mergeResult.score.topology.truthJunctions} matched; {mergeResult.score.topology.mergedJunctions} found.</p>
-              <p className="merge-summary">{mergeResult.result.ingested.ingested.length} accepted; {mergeResult.result.ingested.rejected.length} rejected; {(mergeResult.durationMs / 1000).toFixed(2)} s.</p>
-              {mergeResult.result.trails.features.length === 0 && <p className="merge-summary">No supported trails.</p>}
-            </>}
+            {mergeResult && (
+              <>
+                <dl className="merge-metrics">
+                  <div>
+                    <dt>Mean error</dt>
+                    <dd>
+                      {mergeResult.score.meanErrorMeters === null
+                        ? "N/A"
+                        : `${mergeResult.score.meanErrorMeters.toFixed(2)} m`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>P95 error</dt>
+                    <dd>
+                      {mergeResult.score.p95ErrorMeters === null
+                        ? "N/A"
+                        : `${mergeResult.score.p95ErrorMeters.toFixed(2)} m`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Coverage (5 m)</dt>
+                    <dd>{(mergeResult.score.recall * 100).toFixed(1)}%</dd>
+                  </div>
+                  <div>
+                    <dt>Precision (5 m)</dt>
+                    <dd>{(mergeResult.score.precision * 100).toFixed(1)}%</dd>
+                  </div>
+                </dl>
+                <p className="merge-summary">
+                  Junctions (10 m):{" "}
+                  {mergeResult.score.topology.matchedJunctions}/
+                  {mergeResult.score.topology.truthJunctions} matched;{" "}
+                  {mergeResult.score.topology.mergedJunctions} found.
+                </p>
+                <p className="merge-summary">
+                  {mergeResult.result.ingested.ingested.length} accepted;{" "}
+                  {mergeResult.result.ingested.rejected.length} rejected;{" "}
+                  {(mergeResult.durationMs / 1000).toFixed(2)} s.
+                </p>
+                {mergeResult.result.trails.features.length === 0 && (
+                  <p className="merge-summary">No supported trails.</p>
+                )}
+              </>
+            )}
           </div>
         </section>
 
@@ -627,7 +771,15 @@ function App() {
               <Download size={16} /> Walks
             </button>
           </div>
-          <button className="secondary-button fixture-button" type="button" disabled={!mergeResult || isMerging} onClick={() => mergeResult && downloadJson("merged-trails.geojson", mergeResult.result.trails)}>
+          <button
+            className="secondary-button fixture-button"
+            type="button"
+            disabled={!mergeResult || isMerging}
+            onClick={() =>
+              mergeResult &&
+              downloadJson("merged-trails.geojson", mergeResult.result.trails)
+            }
+          >
             <Download size={16} /> Merged network
           </button>
         </section>
@@ -640,13 +792,43 @@ function App() {
           <span>
             {activeNodeId
               ? "Click to extend; choose an existing point to join"
-              : editingTruth ? "Click a point to begin" : "Network comparison"}
+              : editingTruth
+                ? "Click a point to begin"
+                : "Network comparison"}
           </span>
         </div>
         <div className="legend" aria-label="Map legend">
-          <label><input type="checkbox" checked={visibility.truth} onChange={(event) => setVisibility({ ...visibility, truth: event.target.checked })} /><i className="legend-truth" /> Truth</label>
-          <label><input type="checkbox" checked={visibility.walks} onChange={(event) => setVisibility({ ...visibility, walks: event.target.checked })} /><i className="legend-walk" /> Walks</label>
-          <label><input type="checkbox" checked={visibility.merged} disabled={!mergeResult} onChange={(event) => setVisibility({ ...visibility, merged: event.target.checked })} /><i className="legend-merged" /> Merged</label>
+          <label>
+            <input
+              type="checkbox"
+              checked={visibility.truth}
+              onChange={(event) =>
+                setVisibility({ ...visibility, truth: event.target.checked })
+              }
+            />
+            <i className="legend-truth" /> Truth
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={visibility.walks}
+              onChange={(event) =>
+                setVisibility({ ...visibility, walks: event.target.checked })
+              }
+            />
+            <i className="legend-walk" /> Walks
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={visibility.merged}
+              disabled={!mergeResult}
+              onChange={(event) =>
+                setVisibility({ ...visibility, merged: event.target.checked })
+              }
+            />
+            <i className="legend-merged" /> Merged
+          </label>
         </div>
       </section>
     </main>
@@ -674,9 +856,16 @@ function addTrailLayers(map: maplibregl.Map) {
   });
   map.addSource("merged-trails", { type: "geojson", data: EMPTY_WALKS });
   map.addLayer({
-    id: "merged-trails", type: "line", source: "merged-trails",
+    id: "merged-trails",
+    type: "line",
+    source: "merged-trails",
     layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": "#ff7299", "line-width": 3, "line-opacity": 1, "line-dasharray": [3, 1.5] },
+    paint: {
+      "line-color": "#ff7299",
+      "line-width": 3,
+      "line-opacity": 1,
+      "line-dasharray": [3, 1.5],
+    },
   });
   map.addSource("truth-nodes", {
     type: "geojson",

@@ -245,53 +245,88 @@ describe("trace merging", () => {
 
 describe("output smoothing", () => {
   it("reduces zigzags on a noisy straight trail without moving its graph endpoints", () => {
-    const truth = lines([[[0, 0], [0.004, 0.001]]]);
+    const truth = lines([
+      [
+        [0, 0],
+        [0.004, 0.001],
+      ],
+    ]);
     const walks = generateWalks(graphFromGeoJson(truth), {
-      count: 25, noiseMeters: 5, sampleSpacingMeters: 6, seed: "smoothing-straight",
+      count: 25,
+      noiseMeters: 5,
+      sampleSpacingMeters: 6,
+      seed: "smoothing-straight",
     });
     const original = mergeTraces(walks, { outputSmoothingMeters: 0 });
     const smoothed = mergeTraces(walks);
-    const turning = (collection: FeatureCollection<LineString>) => collection.features.reduce((sum, feature) => {
-      const coordinates = feature.geometry.coordinates;
-      for (let index = 1; index < coordinates.length - 1; index += 1) {
-        const before = coordinates[index - 1];
-        const point = coordinates[index];
-        const after = coordinates[index + 1];
-        const firstX = point[0] - before[0];
-        const firstY = point[1] - before[1];
-        const secondX = after[0] - point[0];
-        const secondY = after[1] - point[1];
-        sum += Math.abs(Math.atan2(firstX * secondY - firstY * secondX, firstX * secondX + firstY * secondY));
-      }
-      return sum;
-    }, 0);
+    const turning = (collection: FeatureCollection<LineString>) =>
+      collection.features.reduce((sum, feature) => {
+        const coordinates = feature.geometry.coordinates;
+        for (let index = 1; index < coordinates.length - 1; index += 1) {
+          const before = coordinates[index - 1];
+          const point = coordinates[index];
+          const after = coordinates[index + 1];
+          const firstX = point[0] - before[0];
+          const firstY = point[1] - before[1];
+          const secondX = after[0] - point[0];
+          const secondY = after[1] - point[1];
+          sum += Math.abs(
+            Math.atan2(
+              firstX * secondY - firstY * secondX,
+              firstX * secondX + firstY * secondY,
+            ),
+          );
+        }
+        return sum;
+      }, 0);
     expect(original.trails.features).toHaveLength(1);
     expect(turning(original.trails)).toBeGreaterThan(0);
-    expect(turning(smoothed.trails)).toBeLessThan(turning(original.trails) * 0.7);
+    expect(turning(smoothed.trails)).toBeLessThan(
+      turning(original.trails) * 0.7,
+    );
     expect(smoothed.stats).toEqual(original.stats);
     for (const [index, feature] of smoothed.trails.features.entries()) {
       const before = original.trails.features[index];
       expect(feature.properties.from).toBe(before.properties.from);
       expect(feature.properties.to).toBe(before.properties.to);
-      expect(feature.geometry.coordinates[0]).toEqual(before.geometry.coordinates[0]);
-      expect(feature.geometry.coordinates.at(-1)).toEqual(before.geometry.coordinates.at(-1));
-      expect(feature.properties.lengthMeters).toBeLessThan(before.properties.lengthMeters);
+      expect(feature.geometry.coordinates[0]).toEqual(
+        before.geometry.coordinates[0],
+      );
+      expect(feature.geometry.coordinates.at(-1)).toEqual(
+        before.geometry.coordinates.at(-1),
+      );
+      expect(feature.properties.lengthMeters).toBeLessThan(
+        before.properties.lengthMeters,
+      );
     }
     expect(evaluateNetwork(smoothed.trails, truth).f1).toBeGreaterThan(0.99);
   });
 
   it("preserves shared junctions and improves saved-network geometry", () => {
-    const truth = JSON.parse(readFileSync(new URL("../../../truth.geojson", import.meta.url), "utf8"));
-    const walks = JSON.parse(readFileSync(new URL("../../../walks-windstone-001.geojson", import.meta.url), "utf8"));
+    const truth = JSON.parse(
+      readFileSync(new URL("../../../truth.geojson", import.meta.url), "utf8"),
+    );
+    const walks = JSON.parse(
+      readFileSync(
+        new URL("../../../walks-windstone-001.geojson", import.meta.url),
+        "utf8",
+      ),
+    );
     const original = mergeTraces(walks, { outputSmoothingMeters: 0 });
     const smoothed = mergeTraces(walks);
     expect(smoothed.stats).toEqual(original.stats);
     for (const [index, feature] of smoothed.trails.features.entries()) {
       const before = original.trails.features[index];
-      expect(feature.geometry.coordinates[0]).toEqual(before.geometry.coordinates[0]);
-      expect(feature.geometry.coordinates.at(-1)).toEqual(before.geometry.coordinates.at(-1));
+      expect(feature.geometry.coordinates[0]).toEqual(
+        before.geometry.coordinates[0],
+      );
+      expect(feature.geometry.coordinates.at(-1)).toEqual(
+        before.geometry.coordinates.at(-1),
+      );
     }
-    expect(evaluateNetwork(smoothed.trails, truth).meanErrorMeters).toBeLessThan(evaluateNetwork(original.trails, truth).meanErrorMeters!);
+    expect(
+      evaluateNetwork(smoothed.trails, truth).meanErrorMeters,
+    ).toBeLessThan(evaluateNetwork(original.trails, truth).meanErrorMeters!);
   });
 });
 
